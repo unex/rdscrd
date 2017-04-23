@@ -29,7 +29,8 @@ def teardown_request(exception):
 
 @app.route('/')
 def index():
-    return db.table("users").run()
+    print(db.table("users").run())
+    return str(db.table("users").run())
 
 if __name__ == '__main__':
     app.run(debug=True)
