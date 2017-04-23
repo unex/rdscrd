@@ -17,7 +17,7 @@
 			</ul>
 			{% endif %}
 			<ul class="login">				
-				<li class="reddit {{ 'connected' if 'reddit_user' in session }}"><a href="{{ 'https://reddit.com/u/' + session.reddit_user if 'reddit_user' in session else '/login/reddit'}}" target="_blank">
+				<li class="reddit {{ 'connected' if 'reddit_user' in session }}"><a href="{{ 'https://reddit.com/u/' + session.reddit_user if 'reddit_user' in session else '/login/reddit'}}">
 					<svg viewBox="0 0 35.5 29.7">
 						<path d="M35.5,14.5c0-2.2-1.8-3.9-3.9-3.9c-1.1,0-2,0.4-2.7,1.1c-2.7-1.8-6.3-2.9-10.3-3.1l2.2-6.9l5.9,1.4c0,0,0,0.1,0,0.1
 							c0,1.8,1.4,3.2,3.2,3.2c1.8,0,3.2-1.4,3.2-3.2S31.6,0,29.9,0c-1.4,0-2.5,0.9-3,2l-6.4-1.5c-0.3-0.1-0.6,0.1-0.7,0.4l-2.4,7.7
@@ -32,7 +32,7 @@
 				</a></li>
 
 				{% if 'discord_user' in session or 'reddit_user' in session %}
-				<li class="discord {{ 'connected' if 'discord_user' in session }}"><a href="{{ 'https://discordapp.com/channels/@me' if 'discord_user' in session else '/login/discord'}}" target="_blank">
+				<li class="discord {{ 'connected' if 'discord_user' in session }}"><a href="{{ 'https://discordapp.com/channels/@me' if 'discord_user' in session else '/login/discord'}}">
 					<svg viewBox="0 0 175.1 198.3">
 						<path d="M105.9,83.2c-5.7,0-10.2,4.9-10.2,11s4.6,11,10.2,11c5.7,0,10.2-4.9,10.2-11S111.5,83.2,105.9,83.2z M69.4,83.2
 							c-5.7,0-10.2,4.9-10.2,11s4.6,11,10.2,11c5.7,0,10.2-4.9,10.2-11C79.7,88.1,75.1,83.2,69.4,83.2z M154.5,0h-134C9.2,0,0,9.2,0,20.5
