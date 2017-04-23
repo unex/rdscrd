@@ -1,0 +1,195 @@
+body {
+	background-color: #fafafa;
+	min-height: 100vh;
+}
+
+.w-max {
+    margin: 0 auto;
+    max-width: 1680px;
+    padding: 0 32px;
+}
+
+header {
+    position: absolute;
+    top: 0;
+	/*background-color: #2196F3;*/
+	height: 64px;
+	padding: 0 6%;
+    /*box-shadow: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);*/
+}
+
+header #logo {
+	display: inline-block;
+	height: 100%;
+	padding: 16px 0;
+}
+
+header #logo svg {
+	display: block;
+	height: 100%;
+	fill: #E0E0E0;
+}
+
+#content {
+    min-height: 100vh;
+}
+
+#verify-container {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+#verify {
+    position: relative;
+	width: 500px;
+    max-width: 100%;
+    flex: 0 0;
+    align-self: center;
+    /*margin: 0 auto;*/
+    /*padding: 20vh 0;*/
+}
+
+#verify a {
+	color: #212121;
+	transition: color .3s ease, background-color .3s ease;
+}
+
+#verify ul.login {
+	list-style-type: none;
+	border-radius: 2px;
+	background-color: #fff;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
+    overflow: hidden;
+}
+
+#verify ul.login li {
+}
+
+#verify ul.login li:not(:last-of-type) {
+	border-bottom: 1px solid #EEEEEE;
+}
+
+#verify ul.login li.connected {
+	border-bottom: none;
+}
+
+#verify ul.login li a {
+	display: block;
+    padding: 0 20px;
+}
+
+#verify ul.login li a span {
+    line-height: 64px;
+    vertical-align: top;
+}
+
+#verify ul.login li a:hover {
+	background-color: rgba(0,0,0,.1);
+}
+
+#verify ul.login li a svg {
+	display: inline-block;
+	fill: #212121;
+    width: 32px;
+    margin-right: 12px;
+}
+
+#verify ul.login li.discord a svg {
+    margin-top: 15px;
+}
+
+#verify ul.login li.reddit a svg {
+    margin-top: 18px;
+}
+
+#verify ul.login li.connected a {
+	color: #fff;
+}
+
+#verify ul.login li.connected a svg {
+	fill: #fff;
+}
+
+#verify ul.login li.connected.reddit {
+	background-color: #ff4500;
+}
+
+#verify ul.login li.connected.discord {
+	background-color: rgb(114, 137, 218);
+}
+
+#verify .logout {
+	display: block;
+    font-weight: bold;
+	margin-top: 12px;
+    line-height: 48px;
+	text-align: center;
+	border-radius: 2px;
+}
+
+#verify .logout:hover {
+	background-color: #E0E0E0;
+}
+
+/* FOOTER */
+
+footer {
+    padding: 48px 64px;
+    background: #fff;
+    bottom: 0;
+}
+
+footer #footer-logo {
+    display: inline-block;
+    margin-top: 6px;
+    margin-bottom: -6px;
+}
+
+footer #footer-logo svg {
+    display: block;
+    height: 36px;
+}
+
+body.home-page {
+    background-color: #FF4500;
+}
+
+body.home-page #content {
+    min-height: 100vh;
+}
+
+body.home-page header {
+    position: absolute;
+    width: 100%;
+    background-color: none;
+    box-shadow: none;
+    padding: 0;
+    height: initial;
+}
+
+body.home-page header #logo {
+    margin: 64px auto;
+    width: 40%;
+    display: block;
+    padding: 0;
+    max-width: 540px;
+}
+
+body.home-page header #logo a { display: block }
+
+body.home-page header #logo svg {
+    height: initial;
+    width: 100%;
+}
+
+body.home-page #content .btn-large {
+    background-color: rgba(255,255,255,.15);
+    width: 100%;
+    margin-top: 40vh;
+}
+
+ul.browser-default { padding-left: 16px; }
+ul.browser-default li { list-style-type: initial }
