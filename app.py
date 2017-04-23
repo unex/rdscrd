@@ -102,6 +102,9 @@ def require_auth(f):
 @app.route('/login/discord')
 def login_discord():
     confirm = confirm_login(DISCORD_REDIRECT_BASE_URI + "/login/discord")
+    if confirm == True:
+        return redirect(url_for('verify'))
+
     if confirm:
         return confirm
 
@@ -115,13 +118,24 @@ def login_discord():
         session['oauth2_state'] = state
         return redirect(authorization_url)
 
-@app.route('/list/login/confirm')
-def confirm_admin_login():
-    confirm = confirm_login(DISCORD_REDIRECT_BASE_URI + "/list/login/confirm")
+@app.route('/list/login')
+def admin_login():
+    confirm = confirm_login(DISCORD_REDIRECT_BASE_URI + "/list/login")
+    if confirm == True:
+        return redirect(url_for('user_list'))
+
     if confirm:
         return confirm
 
-    return redirect(url_for('user_list'))
+    else:
+        scope = ['identify', 'guilds']
+        discord = make_discord_session(scope=scope, redirect_uri=DISCORD_REDIRECT_BASE_URI + "/list/login/confirm")
+        authorization_url, state = discord.authorization_url(
+            AUTHORIZATION_BASE_URL,
+            access_type="offline"
+        )
+        session['oauth2_state'] = state
+        return redirect(authorization_url)
 
 @app.route('/login/reddit')
 def login_reddit():
@@ -194,17 +208,6 @@ def user_list():
         return render_template('list.html', users=list(db.table("users").run()), states=['verified','unverified','banned'], user=user, user_servers=user_servers)
     else:
         return "You are not admin on any valid servers :("
-
-@app.route('/list/login')
-def admin_login():
-    scope = ['identify', 'guilds']
-    discord = make_discord_session(scope=scope, redirect_uri=DISCORD_REDIRECT_BASE_URI + "/list/login/confirm")
-    authorization_url, state = discord.authorization_url(
-        AUTHORIZATION_BASE_URL,
-        access_type="offline"
-    )
-    session['oauth2_state'] = state
-    return redirect(authorization_url)
 
 @app.route('/error')
 def error_page():
@@ -333,7 +336,7 @@ def confirm_login(redirect_uri):
         session.permanent = True
         session['discord_api_token'] = discord_api_token
 
-        return redirect(url_for('verify'))
+        return True
 
 def get_user_guilds(token):
     # If it's an api_token, go fetch the discord_token
