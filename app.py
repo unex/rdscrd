@@ -1,4 +1,4 @@
-import os
+import os, sys
 from datetime import datetime as dt, timedelta
 
 import logging
@@ -8,9 +8,6 @@ from functools import wraps
 from requests_oauthlib import OAuth2Session
 from itsdangerous import JSONWebSignatureSerializer
 from flask import Flask, render_template, url_for, redirect, g, request, session, send_from_directory, abort
-
-app.logger.addHandler(logging.StreamHandler(sys.stdout))
-app.logger.setLevel(logging.ERROR)
 
 # RETHINKDB
 RETHINKDB_HOST = os.environ.get("DOCKHERO_HOST")
@@ -37,6 +34,9 @@ REDDIT_API_BASE_URL = "https://www.reddit.com/api/v1"
 REDDIT_OAUTH_BASE_URL = "https://oauth.reddit.com/api/v1"
 
 app = Flask(__name__)
+
+app.logger.addHandler(logging.StreamHandler(sys.stdout))
+app.logger.setLevel(logging.ERROR)
 
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'this_should_be_configured')
 
