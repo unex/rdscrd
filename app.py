@@ -12,24 +12,24 @@ RETHINKDB_HOST = os.environ.get("DOCKHERO_HOST")
 RETHINKDB_DB = os.environ.get("RETHINKDB_DB")
 RETHINKDB_PASSWORD = os.environ.get("RETHINKDB_PASSWORD")
 
-# DISCORD API
-DISCORD_CLIENT_ID = os.environ.get("DISCORD_CLIENT_ID")
-DISCORD_CLIENT_SECRET = os.environ.get("DISCORD_CLIENT_SECRET")
-DISCORD_REDIRECT_BASE_URI = os.environ.get("DISCORD_REDIRECT_BASE_URI")
+# # DISCORD API
+# DISCORD_CLIENT_ID = os.environ.get("DISCORD_CLIENT_ID")
+# DISCORD_CLIENT_SECRET = os.environ.get("DISCORD_CLIENT_SECRET")
+# DISCORD_REDIRECT_BASE_URI = os.environ.get("DISCORD_REDIRECT_BASE_URI")
 
-DISCORD_API_BASE_URL = 'https://discordapp.com/api'
-AUTHORIZATION_BASE_URL = DISCORD_API_BASE_URL + '/oauth2/authorize'
-TOKEN_URL = DISCORD_API_BASE_URL + '/oauth2/token'
+# DISCORD_API_BASE_URL = 'https://discordapp.com/api'
+# AUTHORIZATION_BASE_URL = DISCORD_API_BASE_URL + '/oauth2/authorize'
+# TOKEN_URL = DISCORD_API_BASE_URL + '/oauth2/token'
 
-ALLOWED_SERVER_IDS = os.environ.get("ALLOWED_SERVER_IDS")
+# ALLOWED_SERVER_IDS = os.environ.get("ALLOWED_SERVER_IDS")
 
-# REDDIT API
-REDDIT_CLIENT_ID = os.environ.get("REDDIT_CLIENT_ID")
-REDDIT_CLIENT_SECRET = os.environ.get("REDDIT_CLIENT_SECRET")
-REDDIT_REDIRECT_URI = os.environ.get("REDDIT_REDIRECT_URI")
+# # REDDIT API
+# REDDIT_CLIENT_ID = os.environ.get("REDDIT_CLIENT_ID")
+# REDDIT_CLIENT_SECRET = os.environ.get("REDDIT_CLIENT_SECRET")
+# REDDIT_REDIRECT_URI = os.environ.get("REDDIT_REDIRECT_URI")
 
-REDDIT_API_BASE_URL = "https://www.reddit.com/api/v1"
-REDDIT_OAUTH_BASE_URL = "https://oauth.reddit.com/api/v1"
+# REDDIT_API_BASE_URL = "https://www.reddit.com/api/v1"
+# REDDIT_OAUTH_BASE_URL = "https://oauth.reddit.com/api/v1"
 
 app = Flask(__name__)
 
