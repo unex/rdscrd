@@ -101,20 +101,19 @@ def require_auth(f):
 
 @app.route('/login/discord')
 def login_discord():
-    scope = ['identify']
-    discord = make_discord_session(scope=scope, redirect_uri=DISCORD_REDIRECT_BASE_URI + "/login/discord/confirm")
-    authorization_url, state = discord.authorization_url(
-        AUTHORIZATION_BASE_URL,
-        access_type="offline"
-    )
-    session['oauth2_state'] = state
-    return redirect(authorization_url)
-
-@app.route('/login/discord/confirm')
-def confirm_discord_login():
     confirm = confirm_login(DISCORD_REDIRECT_BASE_URI + "/login/discord/confirm")
     if confirm:
         return confirm
+
+    else:
+        scope = ['identify']
+        discord = make_discord_session(scope=scope, redirect_uri=DISCORD_REDIRECT_BASE_URI + "/login/discord")
+        authorization_url, state = discord.authorization_url(
+            AUTHORIZATION_BASE_URL,
+            access_type="offline"
+        )
+        session['oauth2_state'] = state
+        return redirect(authorization_url)
 
     return redirect(url_for('verify'))
 
@@ -300,8 +299,12 @@ def get_reddit_user(token):
 def confirm_login(redirect_uri):
     # Check for state and for 0 errors
     state = session.get('oauth2_state')
-    if not state or request.values.get('error'):
+        
+    if request.values.get('error'):
         return redirect(url_for('verify'))
+        
+    if not state:
+        return False
 
     # Fetch token
     print(TOKEN_URL, request.url)
