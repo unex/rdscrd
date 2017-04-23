@@ -44,7 +44,10 @@ def before_request():
     try:
         g.db_conn = db.connect(host=RETHINKDB_HOST, port=28015, db=RETHINKDB_DB, password=RETHINKDB_PASSWORD).repl()
     except db.errors.ReqlDriverError:
-        abort(503, "o fucc something is terribly wrong you should tell someone")
+        error = {
+            'message': 'o fucc this should never happen you should tell someone <br><br> ReqlDriverError'
+        }
+        return render_template('error.html', session=session,  error=error)
 
 # close the connection after each request
 @app.teardown_request
@@ -101,78 +104,87 @@ def require_auth(f):
 
 @app.route('/login/discord')
 def login_discord():
-    scope = ['identify']
-    discord = make_discord_session(scope=scope, redirect_uri=DISCORD_REDIRECT_BASE_URI + "/login/discord/confirm")
-    authorization_url, state = discord.authorization_url(
-        AUTHORIZATION_BASE_URL,
-        access_type="offline"
-    )
-    session['oauth2_state'] = state
-    return redirect(authorization_url)
+    confirm = confirm_login(DISCORD_REDIRECT_BASE_URI + "/login/discord")
+    if confirm == True:
+        return redirect(url_for('verify'))
 
-@app.route('/login/discord/confirm')
-def confirm_discord_login():
-    confirm = confirm_login(DISCORD_REDIRECT_BASE_URI + "/login/discord/confirm")
     if confirm:
         return confirm
 
-    return redirect(url_for('verify'))
+    else:
+        scope = ['identify']
+        discord = make_discord_session(scope=scope, redirect_uri=DISCORD_REDIRECT_BASE_URI + "/login/discord")
+        authorization_url, state = discord.authorization_url(
+            AUTHORIZATION_BASE_URL,
+            access_type="offline"
+        )
+        session['oauth2_state'] = state
+        return redirect(authorization_url)
 
-@app.route('/list/login/confirm')
-def confirm_admin_login():
-    confirm = confirm_login(DISCORD_REDIRECT_BASE_URI + "/list/login/confirm")
+@app.route('/list/login')
+def admin_login():
+    confirm = confirm_login(DISCORD_REDIRECT_BASE_URI + "/list/login")
+    if confirm == True:
+        return redirect(url_for('user_list'))
+
     if confirm:
         return confirm
 
-    return redirect(url_for('user_list'))
+    else:
+        scope = ['identify', 'guilds']
+        discord = make_discord_session(scope=scope, redirect_uri=DISCORD_REDIRECT_BASE_URI + "/list/login")
+        authorization_url, state = discord.authorization_url(
+            AUTHORIZATION_BASE_URL,
+            access_type="offline"
+        )
+        session['oauth2_state'] = state
+        return redirect(authorization_url)
 
 @app.route('/login/reddit')
 def login_reddit():
-    scope = ['identity']
-    reddit = make_reddit_session(scope=scope)
-    authorization_url, state = reddit.authorization_url(
-        REDDIT_API_BASE_URL + "/authorize",
-        access_type="offline"
-    )
-    session['oauth2_state'] = state
-    return redirect(authorization_url)
-
-@app.route('/login/reddit/confirm')
-def confirm_reddit_login():
     # Check for state and for 0 errors
     state = session.get('oauth2_state')
-    if not state or request.values.get('error'):
-        return redirect(url_for('verify'))
+    if request.values.get('error'):
+        error = {
+            'message': 'There was an error authenticating with reddit: {}'.format(request.values.get('error')),
+            'link': '<a href="{}">Return Home</a>'.format(url_for('verify'))
+        }
+        return render_template('error.html', session=session,  error=error)
 
-    # Fetch token
-    client_auth = requests.auth.HTTPBasicAuth(REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET)
-    post_data = {"grant_type": "authorization_code", "code": request.args.get('code'), "redirect_uri": REDDIT_REDIRECT_URI}
-    reddit_token = requests.post(REDDIT_API_BASE_URL + "/access_token", auth=client_auth, data=post_data, headers={'User-agent': 'Discord auth, /u/RenegadeAI'}).json()
+    if state and request.args.get('code'):
+        # Fetch token
+        client_auth = requests.auth.HTTPBasicAuth(REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET)
+        post_data = {"grant_type": "authorization_code", "code": request.args.get('code'), "redirect_uri": REDDIT_REDIRECT_URI}
+        reddit_token = requests.post(REDDIT_API_BASE_URL + "/access_token", auth=client_auth, data=post_data, headers={'User-agent': 'Discord auth, /u/RenegadeAI'}).json()
 
-    if not reddit_token or not 'access_token' in reddit_token:
-        return redirect(url_for('verify'))
+        if not reddit_token or not 'access_token' in reddit_token:
+            return redirect(url_for('logout'))
 
-    # Fetch the user
-    user = get_reddit_user(reddit_token["access_token"])
+        # Fetch the user
+        user = get_reddit_user(reddit_token["access_token"])
 
-    if('status' in user):
-        if(user['status'] == 'error'):
-            session['error'] = user
-            return redirect(url_for('error_page'))
+        if('status' in user):
+            if(user['status'] == 'error'):
+                return render_template('error.html', session=session,  error=user)
 
-    else:
         # Generate api_key from user_id
         serializer = JSONWebSignatureSerializer(app.config['SECRET_KEY'])
         #api_key = str(serializer.dumps({'user_id': user['id']}))
         # Store api_key and token
         db.table("users").filter({"reddit": { "name": user['name']}}).update({ "reddit": { "token": reddit_token}, "method": "web"}).run()
-        # Store api_token in client session
-        #api_token = {
-        #    'api_key': api_key,
-        #    'user_id': user['id']
-        #}
+   
         session.permanent = True
         return redirect(url_for('verify'))
+
+    else:
+        scope = ['identity']
+        reddit = make_reddit_session(scope=scope)
+        authorization_url, state = reddit.authorization_url(
+            REDDIT_API_BASE_URL + "/authorize",
+            access_type="offline"
+        )
+        session['oauth2_state'] = state
+        return redirect(authorization_url)
 
 @app.route('/logout')
 def logout():
@@ -202,21 +214,6 @@ def user_list():
         return render_template('list.html', users=list(db.table("users").run()), states=['verified','unverified','banned'], user=user, user_servers=user_servers)
     else:
         return "You are not admin on any valid servers :("
-
-@app.route('/list/login')
-def admin_login():
-    scope = ['identify', 'guilds']
-    discord = make_discord_session(scope=scope, redirect_uri=DISCORD_REDIRECT_BASE_URI + "/list/login/confirm")
-    authorization_url, state = discord.authorization_url(
-        AUTHORIZATION_BASE_URL,
-        access_type="offline"
-    )
-    session['oauth2_state'] = state
-    return redirect(authorization_url)
-
-@app.route('/error')
-def error_page():
-    return render_template('error.html', session=session,  error=session['error'])
 
 @app.route('/static/<path:path>')
 def send_static(path):
@@ -305,11 +302,18 @@ def get_reddit_user(token):
 def confirm_login(redirect_uri):
     # Check for state and for 0 errors
     state = session.get('oauth2_state')
-    if not state or request.values.get('error'):
-        return redirect(url_for('verify'))
+        
+    if request.values.get('error'):
+        error = {
+            'message': 'There was an error authenticating with discord: {}'.format(request.values.get('error')),
+            'link': '<a href="{}">Return Home</a>'.format(url_for('verify'))
+        }
+        return render_template('error.html', session=session,  error=error)
+
+    if not state or not request.args.get('code'):
+        return False
 
     # Fetch token
-    print(TOKEN_URL, request.url)
     discord = make_discord_session(state=state, redirect_uri=redirect_uri)
     discord_token = discord.fetch_token(TOKEN_URL, client_secret=DISCORD_CLIENT_SECRET, authorization_response=request.url.replace('http:', 'https:'))
     
@@ -321,8 +325,7 @@ def confirm_login(redirect_uri):
 
     if('status' in user):
         if(user['status'] == 'error'):
-            session['error'] = user
-            return redirect(url_for('error_page'))
+            return render_template('error.html', session=session,  error=user)
 
     else:
         # Generate api_key from user_id
@@ -337,6 +340,8 @@ def confirm_login(redirect_uri):
         }
         session.permanent = True
         session['discord_api_token'] = discord_api_token
+
+        return True
 
 def get_user_guilds(token):
     # If it's an api_token, go fetch the discord_token
