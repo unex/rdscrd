@@ -1,6 +1,6 @@
 import os
 import rethinkdb as db
-from flask import Flask, render_template, request, redirect, url_for, abort
+from flask import Flask, render_template, url_for, redirect, g, request, session, send_from_directory, abort
 
 # RETHINKDB
 RETHINKDB_HOST = os.environ.get("DOCKHERO_HOST")
@@ -29,8 +29,9 @@ def teardown_request(exception):
 
 @app.route('/')
 def test():
-    print('HOME')
-    return str(db.table("users").run())
+    # print('HOME')
+    # return str(db.table("users").run())
+    return 'FUCC'
 
 if __name__ == '__main__':
     app.run(debug=True)
