@@ -2,6 +2,7 @@
 flask
 rethinkdb
 requests
+requests_oauthlib
 
 # Testing
 mock
