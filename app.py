@@ -34,6 +34,8 @@ REDDIT_OAUTH_BASE_URL = "https://oauth.reddit.com/api/v1"
 
 app = Flask(__name__)
 
+print('if u can see this magic has happened')
+
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'this_should_be_configured')
 
 # open connection before each request
