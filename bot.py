@@ -19,14 +19,14 @@ VERIFIED_ROLE = '190693397856649216'
 
 client = discord.Client()
 
-db.connect(RETHINKDB_HOST, 28015, db=RETHINKDB_DB).repl()
+db.connect(RETHINKDB_HOST, 28015, db=RETHINKDB_DB, password=RETHINKDB_PASSWORD).repl()
 db.set_loop_type("asyncio")
 
 async def monitor_db():
     #Monitor DB for changes
     while True:
         try:
-            conn = await db.connect(RETHINKDB_HOST, 28015, db=RETHINKDB_DB) # connect
+            conn = await db.connect(RETHINKDB_HOST, 28015, db=RETHINKDB_DB, password=RETHINKDB_PASSWORD) # connect
             feed = await db.table("queue").changes().run(conn) # grab the feed
             print("Monitoring DB")
             while (await feed.fetch_next()): # iterate over the feed
