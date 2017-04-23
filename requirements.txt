@@ -10,5 +10,5 @@ gunicorn
 
 # Bot
 asyncio
-discord
+discord.py
 
