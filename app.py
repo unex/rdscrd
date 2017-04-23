@@ -142,7 +142,7 @@ def login_reddit():
     # Check for state and for 0 errors
     state = session.get('oauth2_state')
     if request.values.get('error'):
-        return redirect(url_for('verify'))
+        return redirect(url_for('verify'), error=request.values.get('error'))
 
     if state and request.args.get('code'):
         # Fetch token
