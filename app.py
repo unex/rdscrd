@@ -33,6 +33,7 @@ REDDIT_API_BASE_URL = "https://www.reddit.com/api/v1"
 REDDIT_OAUTH_BASE_URL = "https://oauth.reddit.com/api/v1"
 
 app = Flask(__name__)
+app.debug = True
 
 print('FFFFFFFFFFFFFFFFFFFF')
 
