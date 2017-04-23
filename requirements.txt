@@ -3,6 +3,7 @@ flask
 rethinkdb
 requests
 requests_oauthlib
+newrelic
 
 # Testing
 mock
