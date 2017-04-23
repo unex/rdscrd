@@ -314,8 +314,6 @@ def confirm_login(redirect_uri):
     # Fetch the user
     user = get_discord_user(discord_token)
 
-    print(user['status'])
-
     if('status' in user):
         if(user['status'] == 'error'):
             session['error'] = user
