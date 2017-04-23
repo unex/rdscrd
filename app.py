@@ -143,7 +143,7 @@ def login_reddit():
     state = session.get('oauth2_state')
     if request.values.get('error'):
         error = {
-            'message': 'There was an error authenticating with reddit: {}'.fornat(request.values.get('error')),
+            'message': 'There was an error authenticating with reddit: {}'.format(request.values.get('error')),
             'link': '<a href="{}">Return Home</a>'.format(url_for('verify'))
         }
         return render_template('error.html', session=session,  error=error)
