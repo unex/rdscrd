@@ -53,7 +53,7 @@ def teardown_request(exception):
 
 @app.route('/')
 def index():
-    return 'okay'
+    return 'WHY'
 
 if __name__ == '__main__':
     app.run(debug=True)
