@@ -29,9 +29,7 @@ def teardown_request(exception):
 
 @app.route('/')
 def test():
-    # print('HOME')
-    # return str(db.table("users").run())
-    return 'FUCC'
+    return str(db.table("users").run())
 
 if __name__ == '__main__':
     app.run(debug=True)
