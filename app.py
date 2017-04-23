@@ -101,7 +101,7 @@ def require_auth(f):
 
 @app.route('/login/discord')
 def login_discord():
-    confirm = confirm_login(DISCORD_REDIRECT_BASE_URI + "/login/discord/confirm")
+    confirm = confirm_login(DISCORD_REDIRECT_BASE_URI + "/login/discord")
     if confirm:
         return confirm
 
@@ -302,7 +302,7 @@ def confirm_login(redirect_uri):
         
     if request.values.get('error'):
         return redirect(url_for('verify'))
-        
+
     if not state:
         return False
 
