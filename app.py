@@ -303,7 +303,7 @@ def confirm_login(redirect_uri):
     if request.values.get('error'):
         return redirect(url_for('verify'))
 
-    if not state and not request.args.get('code'):
+    if not state or not request.args.get('code'):
         return False
 
     # Fetch token
