@@ -115,8 +115,6 @@ def login_discord():
         session['oauth2_state'] = state
         return redirect(authorization_url)
 
-    return redirect(url_for('verify'))
-
 @app.route('/list/login/confirm')
 def confirm_admin_login():
     confirm = confirm_login(DISCORD_REDIRECT_BASE_URI + "/list/login/confirm")
@@ -336,6 +334,8 @@ def confirm_login(redirect_uri):
         }
         session.permanent = True
         session['discord_api_token'] = discord_api_token
+
+        return redirect(url_for('verify'))
 
 def get_user_guilds(token):
     # If it's an api_token, go fetch the discord_token
