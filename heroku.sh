@@ -1,3 +1,3 @@
 #!/bin/bash
-newrelic-admin run-program gunicorn -w 4 -b 0.0.0.0:$PORT -k gevent app:app --daemon
+newrelic-admin run-program gunicorn -w 4 -b 0.0.0.0:$PORT -k gevent app:app
 python3 bot.py
