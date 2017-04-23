@@ -28,8 +28,8 @@ def teardown_request(exception):
         pass
 
 @app.route('/')
-def index():
-    print(db.table("users").run())
+def test():
+    print('HOME')
     return str(db.table("users").run())
 
 if __name__ == '__main__':
