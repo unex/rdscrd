@@ -140,7 +140,7 @@ def login_reddit():
         reddit_token = requests.post(REDDIT_API_BASE_URL + "/access_token", auth=client_auth, data=post_data, headers={'User-agent': 'Discord auth, /u/RenegadeAI'}).json()
 
         if not reddit_token or not 'access_token' in reddit_token:
-            return redirect(url_for('verify'))
+            return redirect(url_for('logout'))
 
         # Fetch the user
         user = get_reddit_user(reddit_token["access_token"])
@@ -156,7 +156,6 @@ def login_reddit():
         # Store api_key and token
         db.table("users").filter({"reddit": { "name": user['name']}}).update({ "reddit": { "token": reddit_token}, "method": "web"}).run()
    
-
         session.permanent = True
         return redirect(url_for('verify'))
 
