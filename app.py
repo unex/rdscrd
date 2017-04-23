@@ -132,7 +132,7 @@ def login_reddit():
     if request.values.get('error'):
         return redirect(url_for('verify'))
 
-    if state:
+    if state and request.args.get('code'):
         # Fetch token
         client_auth = requests.auth.HTTPBasicAuth(REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET)
         post_data = {"grant_type": "authorization_code", "code": request.args.get('code'), "redirect_uri": REDDIT_REDIRECT_URI}
@@ -303,7 +303,7 @@ def confirm_login(redirect_uri):
     if request.values.get('error'):
         return redirect(url_for('verify'))
 
-    if not state:
+    if not state and request.args.get('code'):
         return False
 
     # Fetch token
