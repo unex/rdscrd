@@ -129,7 +129,7 @@ def admin_login():
 
     else:
         scope = ['identify', 'guilds']
-        discord = make_discord_session(scope=scope, redirect_uri=DISCORD_REDIRECT_BASE_URI + "/list/login/confirm")
+        discord = make_discord_session(scope=scope, redirect_uri=DISCORD_REDIRECT_BASE_URI + "/list/login")
         authorization_url, state = discord.authorization_url(
             AUTHORIZATION_BASE_URL,
             access_type="offline"
