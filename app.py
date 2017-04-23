@@ -128,51 +128,47 @@ def confirm_admin_login():
 
 @app.route('/login/reddit')
 def login_reddit():
-    scope = ['identity']
-    reddit = make_reddit_session(scope=scope)
-    authorization_url, state = reddit.authorization_url(
-        REDDIT_API_BASE_URL + "/authorize",
-        access_type="offline"
-    )
-    session['oauth2_state'] = state
-    return redirect(authorization_url)
-
-@app.route('/login/reddit/confirm')
-def confirm_reddit_login():
     # Check for state and for 0 errors
     state = session.get('oauth2_state')
-    if not state or request.values.get('error'):
+    if request.values.get('error'):
         return redirect(url_for('verify'))
 
-    # Fetch token
-    client_auth = requests.auth.HTTPBasicAuth(REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET)
-    post_data = {"grant_type": "authorization_code", "code": request.args.get('code'), "redirect_uri": REDDIT_REDIRECT_URI}
-    reddit_token = requests.post(REDDIT_API_BASE_URL + "/access_token", auth=client_auth, data=post_data, headers={'User-agent': 'Discord auth, /u/RenegadeAI'}).json()
+    if state:
+        # Fetch token
+        client_auth = requests.auth.HTTPBasicAuth(REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET)
+        post_data = {"grant_type": "authorization_code", "code": request.args.get('code'), "redirect_uri": REDDIT_REDIRECT_URI}
+        reddit_token = requests.post(REDDIT_API_BASE_URL + "/access_token", auth=client_auth, data=post_data, headers={'User-agent': 'Discord auth, /u/RenegadeAI'}).json()
 
-    if not reddit_token or not 'access_token' in reddit_token:
-        return redirect(url_for('verify'))
+        if not reddit_token or not 'access_token' in reddit_token:
+            return redirect(url_for('verify'))
 
-    # Fetch the user
-    user = get_reddit_user(reddit_token["access_token"])
+        # Fetch the user
+        user = get_reddit_user(reddit_token["access_token"])
 
-    if('status' in user):
-        if(user['status'] == 'error'):
-            session['error'] = user
-            return redirect(url_for('error_page'))
+        if('status' in user):
+            if(user['status'] == 'error'):
+                session['error'] = user
+                return redirect(url_for('error_page'))
 
-    else:
         # Generate api_key from user_id
         serializer = JSONWebSignatureSerializer(app.config['SECRET_KEY'])
         #api_key = str(serializer.dumps({'user_id': user['id']}))
         # Store api_key and token
         db.table("users").filter({"reddit": { "name": user['name']}}).update({ "reddit": { "token": reddit_token}, "method": "web"}).run()
-        # Store api_token in client session
-        #api_token = {
-        #    'api_key': api_key,
-        #    'user_id': user['id']
-        #}
+   
+
         session.permanent = True
         return redirect(url_for('verify'))
+
+    else:
+        scope = ['identity']
+        reddit = make_reddit_session(scope=scope)
+        authorization_url, state = reddit.authorization_url(
+            REDDIT_API_BASE_URL + "/authorize",
+            access_type="offline"
+        )
+        session['oauth2_state'] = state
+        return redirect(authorization_url)
 
 @app.route('/logout')
 def logout():
