@@ -1,6 +1,7 @@
 # Flask
 flask
 rethinkdb
+requests
 
 # Testing
 mock
