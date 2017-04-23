@@ -14,9 +14,9 @@ async def on_ready():
 
     print('-----------------------------------------')
 
+loop = asyncio.get_event_loop()
 while True:
     try:
-        loop.create_task(monitor_db())
         loop.run_until_complete(client.login(DISCORD_TOKEN))
         loop.run_until_complete(client.connect())
 
