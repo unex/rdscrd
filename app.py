@@ -307,7 +307,6 @@ def confirm_login(redirect_uri):
         return False
 
     # Fetch token
-    print(TOKEN_URL, request.url)
     discord = make_discord_session(state=state, redirect_uri=redirect_uri)
     discord_token = discord.fetch_token(TOKEN_URL, client_secret=DISCORD_CLIENT_SECRET, authorization_response=request.url.replace('http:', 'https:'))
     
@@ -316,6 +315,8 @@ def confirm_login(redirect_uri):
 
     # Fetch the user
     user = get_discord_user(discord_token)
+
+    print(user['status'])
 
     if('status' in user):
         if(user['status'] == 'error'):
