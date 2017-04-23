@@ -44,7 +44,10 @@ def before_request():
     try:
         g.db_conn = db.connect(host=RETHINKDB_HOST, port=28015, db=RETHINKDB_DB, password=RETHINKDB_PASSWORD).repl()
     except db.errors.ReqlDriverError:
-        abort(503, "o fucc something is terribly wrong you should tell someone")
+        error = {
+            'message': 'o fucc this should never happen you should tell someone <br><br> ReqlDriverError'
+        }
+        return render_template('error.html', session=session,  error=error)
 
 # close the connection after each request
 @app.teardown_request
@@ -162,8 +165,7 @@ def login_reddit():
 
         if('status' in user):
             if(user['status'] == 'error'):
-                session['error'] = user
-                return redirect(url_for('error_page'))
+                return render_template('error.html', session=session,  error=user)
 
         # Generate api_key from user_id
         serializer = JSONWebSignatureSerializer(app.config['SECRET_KEY'])
@@ -212,10 +214,6 @@ def user_list():
         return render_template('list.html', users=list(db.table("users").run()), states=['verified','unverified','banned'], user=user, user_servers=user_servers)
     else:
         return "You are not admin on any valid servers :("
-
-@app.route('/error')
-def error_page():
-    return render_template('error.html', session=session,  error=session['error'])
 
 @app.route('/static/<path:path>')
 def send_static(path):
@@ -306,7 +304,11 @@ def confirm_login(redirect_uri):
     state = session.get('oauth2_state')
         
     if request.values.get('error'):
-        return redirect(url_for('verify'))
+        error = {
+            'message': 'There was an error authenticating with discord: {}'.format(request.values.get('error')),
+            'link': '<a href="{}">Return Home</a>'.format(url_for('verify'))
+        }
+        return render_template('error.html', session=session,  error=error)
 
     if not state or not request.args.get('code'):
         return False
@@ -323,8 +325,7 @@ def confirm_login(redirect_uri):
 
     if('status' in user):
         if(user['status'] == 'error'):
-            session['error'] = user
-            return redirect(url_for('error_page'))
+            return render_template('error.html', session=session,  error=user)
 
     else:
         # Generate api_key from user_id
