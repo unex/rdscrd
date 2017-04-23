@@ -311,7 +311,7 @@ def confirm_login(redirect_uri):
     # Fetch token
     print(TOKEN_URL, request.url)
     discord = make_discord_session(state=state, redirect_uri=redirect_uri)
-    discord_token = discord.fetch_token(TOKEN_URL, client_secret=DISCORD_CLIENT_SECRET, authorization_response=request.url)
+    discord_token = discord.fetch_token(TOKEN_URL, client_secret=DISCORD_CLIENT_SECRET, authorization_response=request.url.replace('http:', 'https:'))
     
     if not discord_token:
         return redirect(url_for('verify'))
