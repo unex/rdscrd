@@ -16,7 +16,7 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'this_should_be_configur
 def before_request():
     try:
         g.db_conn = db.connect(host=RETHINKDB_HOST, port=28015, db=RETHINKDB_DB, password=RETHINKDB_PASSWORD).repl()
-    except:
+    except db.errors.ReqlDriverError:
         abort(503, "o fucc something is terribly wrong you should tell someone")
 
 # close the connection after each request
@@ -28,8 +28,8 @@ def teardown_request(exception):
         pass
 
 @app.route('/')
-def test():
-    return str(db.table("users").run())
+def index():
+    return 'woot'
 
 if __name__ == '__main__':
     app.run(debug=True)
