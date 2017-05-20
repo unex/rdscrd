@@ -172,7 +172,7 @@ async def set_verified(member_id):
             print('VERIFIED {0} ON {1}'.format(member.name + '#' + member.discriminator, server.name))
 
         except Exception as e:
-            print("ERROR ADDING ROLE FOR {0} IN {1}: {2}".format(change['new_val']['discord']['name'], server.name, e)) # Log an error if there was a problem
+            print("ERROR ADDING ROLE FOR {0} IN {1}: {2}".format(member.name, server.name, e)) # Log an error if there was a problem
 
 def is_mod(member):
     role = discord.utils.get(member.server.roles, id='185565928333770752')
