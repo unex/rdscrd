@@ -246,7 +246,7 @@ def get_discord_user(token):
                 return {"status": "error", "message": "Error, that account is already affiliated", "link": "<a href='/'>Return to Verify</a>"}
 
         base = db.table("users").filter({"reddit": {"name":session["reddit_user"]}})
-        base.update({"discord": user, "state": "verified"}).run()
+        base.update({"discord": user, "state": "verified", "verified_at": dt.now().timestamp()}).run()
 
         # Add the ID of that to the queue
         db.table("queue").insert([{'ref': list(base.run())[0]['id']}]).run()
