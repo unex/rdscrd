@@ -23,6 +23,10 @@
             $('select').material_select();
         });
 
+        $.get('/ajax/stats').then(function(data) {
+            console.log(data);
+        })
+
        var chart = new CanvasJS.Chart("chartContainer", {
             title: {
                 text: "Site Traffic",
