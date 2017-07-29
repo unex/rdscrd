@@ -169,7 +169,7 @@ def login_reddit():
 
         # Generate api_key from user_id
         serializer = JSONWebSignatureSerializer(app.config['SECRET_KEY'])
-        #api_key = str(serializer.dumps({'user_id': user['id']}))
+
         # Store api_key and token
         db.table("users").filter({"reddit": { "name": user['name']}}).update({ "reddit": { "token": reddit_token}}).run()
 
@@ -272,13 +272,7 @@ def get_reddit_user(token):
         # Save that to the db
         if("discord_user" in session): #If Discord user logged in
             return redirect(url_for('logout'))
-            # data = list(db.table("users").filter({"reddit": { "name":user["name"]}}).run())
-            #Return error if discord account already affiliated with a different reddit account
-            # if('discord_user' in data):
-            #     if(data['discord']["name"] != session['discord_user']):
-            #         return {"status": "error", "message": "Error, that account is already affiliated", "link": "<a href='/'>Return to Verify</a>"}
 
-            # db.table("users").filter({ "discord": { "name": session["discord_user"]}}).update({"reddit": user, "state": "verified"}).run()
         else:
             if not(list(db.table("users").filter(db.row["reddit"]["name"] == user['name']).run())):
                 db.table("users").insert([{"reddit": user, "state": "unverified"}]).run()
