@@ -77,13 +77,13 @@ def old_verify():
     return redirect(url_for('verify'), code=302)
 
 #Change user state ajax
-@app.route('/ajax/change_state', methods=['GET'])
-def change_state():
-    id = request.args.get('id')
-    state = request.args.get('state')
-    print(id + " : " + state)
-    db.table("users").filter(db.row["id"] == id).update({"state": state, "method": "web"}).run()
-    return state
+# @app.route('/ajax/change_state', methods=['GET'])
+# def change_state():
+#     id = request.args.get('id')
+#     state = request.args.get('state')
+#     print(id + " : " + state)
+#     db.table("users").filter(db.row["id"] == id).update({"state": state, "method": "web"}).run()
+#     return state
 
 def require_auth(f):
     @wraps(f)
@@ -172,7 +172,7 @@ def login_reddit():
         #api_key = str(serializer.dumps({'user_id': user['id']}))
         # Store api_key and token
         db.table("users").filter({"reddit": { "name": user['name']}}).update({ "reddit": { "token": reddit_token}, "method": "web"}).run()
-   
+
         session.permanent = True
         return redirect(url_for('verify'))
 
@@ -302,7 +302,7 @@ def get_reddit_user(token):
 def confirm_login(redirect_uri):
     # Check for state and for 0 errors
     state = session.get('oauth2_state')
-        
+
     if request.values.get('error'):
         error = {
             'message': 'There was an error authenticating with discord: {}'.format(request.values.get('error')),
@@ -316,7 +316,7 @@ def confirm_login(redirect_uri):
     # Fetch token
     discord = make_discord_session(state=state, redirect_uri=redirect_uri)
     discord_token = discord.fetch_token(TOKEN_URL, client_secret=DISCORD_CLIENT_SECRET, authorization_response=request.url.replace('http:', 'https:'))
-    
+
     if not discord_token:
         return redirect(url_for('verify'))
 
