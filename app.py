@@ -62,11 +62,11 @@ def verify():
     if "reddit_user" in session and "discord_user" in session:
         pass
     elif "reddit_user" in session:
-        discord_user = list(db.table("users").filter({ "reddit": {"name": session['reddit_user']}, "method": "web"}).run())[0]
+        discord_user = list(db.table("users").filter({ "reddit": {"name": session['reddit_user']}}).run())[0]
         if 'discord' in discord_user:
             session["discord_user"] = discord_user["discord"]["name"]
     elif "discord_user" in session:
-        reddit_user = list(db.table("users").filter({ "discord": {"name": session['discord_user']}, "method": "web"}).run())[0]
+        reddit_user = list(db.table("users").filter({ "discord": {"name": session['discord_user']}}).run())[0]
         if 'reddit' in reddit_user:
             session["reddit_user"] = reddit_user["reddit"]["name"]
 
@@ -82,7 +82,7 @@ def old_verify():
 #     id = request.args.get('id')
 #     state = request.args.get('state')
 #     print(id + " : " + state)
-#     db.table("users").filter(db.row["id"] == id).update({"state": state, "method": "web"}).run()
+#     db.table("users").filter(db.row["id"] == id).update({"state": state}).run()
 #     return state
 
 def require_auth(f):
@@ -95,7 +95,7 @@ def require_auth(f):
             return redirect(url_for('admin_login'))
 
         # Does his api_key is in the db?
-        user_api_key = list(db.table("users").filter({"discord": {"id": api_token['user_id']}, "method": "web"}).run())[0]['discord']['api_key']
+        user_api_key = list(db.table("users").filter({"discord": {"id": api_token['user_id']}}).run())[0]['discord']['api_key']
         if user_api_key != api_token['api_key']:
             return redirect(url_for('logout'))
 
@@ -171,7 +171,7 @@ def login_reddit():
         serializer = JSONWebSignatureSerializer(app.config['SECRET_KEY'])
         #api_key = str(serializer.dumps({'user_id': user['id']}))
         # Store api_key and token
-        db.table("users").filter({"reddit": { "name": user['name']}}).update({ "reddit": { "token": reddit_token}, "method": "web"}).run()
+        db.table("users").filter({"reddit": { "name": user['name']}}).update({ "reddit": { "token": reddit_token}}).run()
 
         session.permanent = True
         return redirect(url_for('verify'))
@@ -246,16 +246,16 @@ def get_discord_user(token):
                 return {"status": "error", "message": "Error, that account is already affiliated", "link": "<a href='/'>Return to Verify</a>"}
 
         base = db.table("users").filter({"reddit": {"name":session["reddit_user"]}})
-        base.update({"discord": user, "state": "verified", "method": "web"}).run()
+        base.update({"discord": user, "state": "verified"}).run()
 
         # Add the ID of that to the queue
         db.table("queue").insert([{'ref': list(base.run())[0]['id']}]).run()
     else:
 
         if not(list(db.table("users").filter({"discord": {"name": user['name']}}).run())):
-            db.table("users").insert([{"discord": user, "state": "unverified", "method": "web"}]).run()
+            db.table("users").insert([{"discord": user, "state": "unverified"}]).run()
         else:
-            db.table("users").filter({"discord": {"name": user["name"]}}).update({"discord": user, "method": "web"}).run()
+            db.table("users").filter({"discord": {"name": user["name"]}}).update({"discord": user}).run()
 
     # Save that to the session for easy template access
     session["discord_user"] = user["name"]
@@ -278,12 +278,12 @@ def get_reddit_user(token):
             #     if(data['discord']["name"] != session['discord_user']):
             #         return {"status": "error", "message": "Error, that account is already affiliated", "link": "<a href='/'>Return to Verify</a>"}
 
-            # db.table("users").filter({ "discord": { "name": session["discord_user"]}}).update({"reddit": user, "state": "verified", "method": "web"}).run()
+            # db.table("users").filter({ "discord": { "name": session["discord_user"]}}).update({"reddit": user, "state": "verified"}).run()
         else:
             if not(list(db.table("users").filter(db.row["reddit"]["name"] == user['name']).run())):
-                db.table("users").insert([{"reddit": user, "state": "unverified", "method": "web"}]).run()
+                db.table("users").insert([{"reddit": user, "state": "unverified"}]).run()
             else:
-                db.table("users").filter({"reddit": {"name": user['name']}}).update({"reddit": user, "method": "web"}).run()
+                db.table("users").filter({"reddit": {"name": user['name']}}).update({"reddit": user}).run()
 
         # Save that to the session for easy template access
         session["reddit_user"] = user['name']
@@ -332,7 +332,7 @@ def confirm_login(redirect_uri):
         serializer = JSONWebSignatureSerializer(app.config['SECRET_KEY'])
         api_key = str(serializer.dumps({'user_id': user['id']}))
         # Store api_key and token
-        db.table("users").filter({"discord": {"name": user['name']}}).update({"discord": {"api_key": api_key, "token": discord_token}, "method": "web"}).run()
+        db.table("users").filter({"discord": {"name": user['name']}}).update({"discord": {"api_key": api_key, "token": discord_token}}).run()
         # Store api_token in client session
         discord_api_token = {
             'api_key': api_key,
@@ -360,7 +360,7 @@ def get_user_guilds(token):
 
     guilds = req.json()
     # Saving that to the db
-    db.table("users").filter({"discord": {"id": user_id}}).update({"discord": {"guilds": guilds}, "method": "web"}).run()
+    db.table("users").filter({"discord": {"id": user_id}}).update({"discord": {"guilds": guilds}}).run()
     return guilds
 
 
@@ -370,7 +370,7 @@ def get_user_managed_servers(user, guilds):
 def token_updater(discord_token):
     user = get_discord_user(discord_token)
     # Save the new discord_token
-    db.table("users").filter({"discord": {"id": user['id']}}).update({"discord": {"token": discord_token}, "method": "web"}).run()
+    db.table("users").filter({"discord": {"id": user['id']}}).update({"discord": {"token": discord_token}}).run()
 
 def make_discord_session(token=None, state=None, scope=None, redirect_uri=None):
     return OAuth2Session(
