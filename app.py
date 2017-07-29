@@ -215,6 +215,30 @@ def user_list():
     else:
         return "You are not admin on any valid servers :("
 
+@app.route('/stats')
+@require_auth
+def user_stats():
+    user_servers = []
+    users = []
+
+    user = get_discord_user(session['discord_api_token'])
+    guilds = get_user_guilds(session['discord_api_token'])
+    servers = sorted(
+        get_user_managed_servers(user, guilds),
+        key=lambda s: s['name'].lower()
+    )
+
+    user_servers = []
+    for server in servers:
+        #print(server['id'] + ' : ' + server['name'])
+        if(server['id'] in ALLOWED_SERVER_IDS):
+            user_servers.append(server)
+
+    if(len(user_servers) > 0):
+        return render_template('stats.html', user=user, user_servers=user_servers)
+    else:
+        return "You are not admin on any valid servers :("
+
 @app.route('/static/<path:path>')
 def send_static(path):
     return '//reddiscord.synesis.co/{}'.format(path)
