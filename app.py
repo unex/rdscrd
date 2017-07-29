@@ -6,7 +6,7 @@ import rethinkdb as db
 from functools import wraps
 from requests_oauthlib import OAuth2Session
 from itsdangerous import JSONWebSignatureSerializer
-from flask import Flask, render_template, url_for, redirect, g, request, session, send_from_directory, abort
+from flask import Flask, render_template, url_for, redirect, g, request, session, send_from_directory, abort, jsonify
 
 # RETHINKDB
 RETHINKDB_HOST = os.environ.get("DOCKHERO_HOST")
@@ -193,7 +193,7 @@ def logout():
 
 @app.route('/list')
 def user_list():
-    return redirect(url_for('user_stats'), code=302)
+    return redirect(url_for('admin'), code=302)
 
 # @require_auth
 # def user_list():
@@ -246,7 +246,7 @@ def admin():
 def ajax_stats():
 #    id = request.args.get('id')
 #    state = request.args.get('state')
-    return [ts['verified_at'] for ts in list(db.table('users').between(1498867200, 1501286400, index='verified_at').order_by(index='verified_at').run())]
+    return jsonify([ts['verified_at'] for ts in list(db.table('users').between(1498867200, 1501286400, index='verified_at').order_by(index='verified_at').run())])
 
 @app.route('/static/<path:path>')
 def send_static(path):
