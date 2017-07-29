@@ -192,32 +192,35 @@ def logout():
     return redirect(url_for('verify'))
 
 @app.route('/list')
-@require_auth
 def user_list():
-    user_servers = []
-    users = []
+    return redirect(url_for('user_stats'), code=302)
 
-    user = get_discord_user(session['discord_api_token'])
-    guilds = get_user_guilds(session['discord_api_token'])
-    servers = sorted(
-        get_user_managed_servers(user, guilds),
-        key=lambda s: s['name'].lower()
-    )
+# @require_auth
+# def user_list():
+#     user_servers = []
+#     users = []
 
-    user_servers = []
-    for server in servers:
-        #print(server['id'] + ' : ' + server['name'])
-        if(server['id'] in ALLOWED_SERVER_IDS):
-            user_servers.append(server)
+#     user = get_discord_user(session['discord_api_token'])
+#     guilds = get_user_guilds(session['discord_api_token'])
+#     servers = sorted(
+#         get_user_managed_servers(user, guilds),
+#         key=lambda s: s['name'].lower()
+#     )
 
-    if(len(user_servers) > 0):
-        return render_template('list.html', users=list(db.table("users").run()), states=['verified','unverified','banned'], user=user, user_servers=user_servers)
-    else:
-        return "You are not admin on any valid servers :("
+#     user_servers = []
+#     for server in servers:
+#         #print(server['id'] + ' : ' + server['name'])
+#         if(server['id'] in ALLOWED_SERVER_IDS):
+#             user_servers.append(server)
 
-@app.route('/stats')
+#     if(len(user_servers) > 0):
+#         return render_template('list.html', users=list(db.table("users").run()), states=['verified','unverified','banned'], user=user, user_servers=user_servers)
+#     else:
+#         return "You are not admin on any valid servers :("
+
+@app.route('/admin')
 @require_auth
-def user_stats():
+def admin():
     user_servers = []
     users = []
 
@@ -235,9 +238,15 @@ def user_stats():
             user_servers.append(server)
 
     if(len(user_servers) > 0):
-        return render_template('stats.html', user=user, user_servers=user_servers)
+        return render_template('admin.html', user=user, user_servers=user_servers)
     else:
         return "You are not admin on any valid servers :("
+
+@app.route('/ajax/stats')
+def ajax_stats():
+#    id = request.args.get('id')
+#    state = request.args.get('state')
+    return [ts['verified_at'] for ts in list(db.table('users').between(1498867200, 1501286400, index='verified_at').order_by(index='verified_at').run())]
 
 @app.route('/static/<path:path>')
 def send_static(path):
