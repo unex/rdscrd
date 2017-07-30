@@ -6,40 +6,20 @@
     <h1>User List</h1>
 
     <p>Logged in as: {{user.username}}</p>
-    <p>You are admin on:</p>
-    <ul class='browser-default'>
-    {% for server in user_servers %}
-        <li>{{server.name}}</li>
-    {% endfor %}
-    </ul>
 
     <table class="striped centered">
         <thead>
-            <th>#</th><th>Reddit</th><th>Discord</th><th>ID</th><th>State</th>
+            <th>#</th><th>UUID</th><th>Reddit</th><th>Discord</th><th>State</th>
         </thead>
         <tbody>
         {% for user in users %}
             <tr>
                 <td>{{loop.index}}</td>
+                <td>{{ user.id }}</td>
                 <td>{% if user.reddit %}<a href="https://reddit.com/u/{{ user.reddit.name }}" target="_blank">{{ user.reddit.name }}</a>{% endif %}</td>
                 <td>{% if user.discord %}{{ user.discord.name }}{% endif %}</td>
-                <td>
-                    {{ user.id }}
-                </td>
-                <td>
-                    {{ user.state }}
-                    <!--
-                    <select id='{{ user.id }}' class='state-dropdown'>
-                        {% for state in states %}
-                            {% if state == user.state %}
-                                <option value="{{state}}" selected>{{state}}</option>
-                            {% else %}
-                                <option value="{{state}}">{{state}}</option>
-                            {% endif %}
-                        {% endfor %}
-                    </select>
-                    -->
-                </td>
+                <td>{{ user.state }}</td>
+                <td>{{ user.verified_at|datetimeformat }}</td>
             </tr>
         {% endfor %}
         </tbody>
@@ -49,33 +29,6 @@
         $(document).ready(function() {
             $('select').material_select();
         });
-
-        /*
-        $("select.state-dropdown").change(function() {
-            console.log("PLS");
-            var self = this,
-                dropdown = $(self).parent(".state-dropdown"),
-                old_state = $(self).val();
-
-            //dropdown.find('.dropdown-content li').removeClass("disabled");
-            //dropdown.find('.dropdown-content li span:contains(' + $(self).val() + ')').parent("li").addClass("disabled");
-
-            $.ajax({
-                type: "GET",
-                url: "{{ url_for('change_state') }}",
-                data: {
-                    id: $(self).attr('id'),
-                    state: $(self).val()
-                },
-                success: function(data) {
-                    if(!data.state == "success") {
-                        //dropdown.find('.dropdown-content li').removeClass("disabled");
-                        //dropdown.find('.dropdown-content li span:contains(' + old_state + ')').parent("li").addClass("disabled");
-                    }
-                }
-            });
-        });
-        */
     </script>
 </div>
 

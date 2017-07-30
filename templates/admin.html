@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block content %}
+
+
+<div class="container">
+    <h1>Admin</h1>
+
+    <p>Logged in as: {{user.name}}</p>
+
+    <h3>Daily verifications</h3>
+    <div class="row">
+        <div class="col s12">
+            <ul id="verifications_sort" class="tabs">
+                <li class="tab col"><a class="active" href="#" data-range="week">Week</a></li>
+                <li class="tab col"><a href="#" data-range="month">Month</a></li>
+                <li class="tab col"><a href="#" data-range="year">Year</a></li>
+            </ul>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col s12">
+            <div id="chart_verifications" style="height: 300px; width: 100%;"></div>
+        </div>
+    </div>
+
+    <h3>Recent users</h3><a href="{{ url_for('user_list') }}">View all</a>
+    <table id="users" class="striped centered">
+        <thead>
+            <th>UUID</th><th>Reddit</th><th>Discord</th><th>State</th><th>Verified At</th>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <script type="text/javascript" src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
+
+    <script type="text/javascript">
+        $(document).ready(function() {
+            $('select').material_select();
+        });
+
+
+        var stats = {
+            init: function() {
+                let that = this;
+
+                this.build('week');
+
+                $('#verifications_sort a').click(function () {
+                    $('#chart_verifications').css({'opacity': .3, 'pointer-events': 'none'})
+
+                    that.build($(this).data('range'));
+                });
+            },
+
+            build: function(range) {
+                let that = this;
+
+                $.get('/ajax/stats', {'range': range}).then(function(data) {
+                    console.log(data);
+
+                    let dates = [];
+
+                    for(date in data) {
+                        dates.push({
+                            x: new Date(date),
+                            y: data[date]
+                        })
+                    }
+
+                    that.chart = new CanvasJS.Chart("chart_verifications", {
+                        animationEnabled: true,
+                        axisX: {
+                            gridColor: "Silver",
+                            tickColor: "silver",
+                            valueFormatString: "MMM DD"
+                        },
+                        // toolTip: {
+                        //     shared: true
+                        // },
+                        theme: "theme2",
+                        backgroundColor: 'transparent',
+                        axisY: {
+                            gridColor: "Silver",
+                            tickColor: "silver"
+                        },
+                        data: [{
+                            type: "line",
+                            // showInLegend: true,
+                            lineThickness: 2,
+                            name: "Verifications",
+                            markerType: "square",
+                            color: "#F08080",
+                            dataPoints: dates
+                        }],
+                    });
+
+                    $('#chart_verifications').css({'opacity': 1, 'pointer-events': 'initial'})
+
+                    that.chart.render();
+                })
+            }
+        }
+
+        stats.init()
+
+        $.get('/ajax/list').then(function (data) {
+            console.log(data)
+
+            $(data).each(function () {
+                $('#users tbody').append('<tr><td>' + this.id + '</td><td><a href="//reddit.com/u/' + this.reddit + '" target="_blank">' + this.reddit + '</a></td><td>' + this.discord + '</td><td>' + this.state + '</td><td>' + new Date(this.verified_at * 1000).toUTCString() + '</td></tr>')
+            })
+
+        })
+
+    </script>
+</div>
+
+{% endblock %}

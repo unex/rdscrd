@@ -31,7 +31,7 @@ async def monitor_db():
             print("Monitoring DB")
             while (await feed.fetch_next()): # iterate over the feed
                 change = await feed.next() # grab the changes
-                if change['new_val']:                    
+                if change['new_val']:
                     user = db.table("users").get(change['new_val']['ref']).run()
 
                     if user['state'] == 'verified':
@@ -180,7 +180,7 @@ def is_mod(member):
 
 while True:
     loop = asyncio.get_event_loop()
-    
+
     try:
         loop.create_task(monitor_db())
         loop.run_until_complete(client.login(DISCORD_TOKEN))
