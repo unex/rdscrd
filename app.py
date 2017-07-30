@@ -76,15 +76,6 @@ def verify():
 def old_verify():
     return redirect(url_for('verify'), code=302)
 
-#Change user state ajax
-# @app.route('/ajax/change_state', methods=['GET'])
-# def change_state():
-#     id = request.args.get('id')
-#     state = request.args.get('state')
-#     print(id + " : " + state)
-#     db.table("users").filter(db.row["id"] == id).update({"state": state}).run()
-#     return state
-
 def require_auth(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
@@ -121,9 +112,9 @@ def login_discord():
         session['oauth2_state'] = state
         return redirect(authorization_url)
 
-@app.route('/list/login')
+@app.route('/admin/login')
 def admin_login():
-    confirm = confirm_login(DISCORD_REDIRECT_BASE_URI + "/list/login")
+    confirm = confirm_login(DISCORD_REDIRECT_BASE_URI + "/admin/login")
     if confirm == True:
         return redirect(url_for('user_list'))
 
@@ -132,7 +123,7 @@ def admin_login():
 
     else:
         scope = ['identify', 'guilds']
-        discord = make_discord_session(scope=scope, redirect_uri=DISCORD_REDIRECT_BASE_URI + "/list/login")
+        discord = make_discord_session(scope=scope, redirect_uri=DISCORD_REDIRECT_BASE_URI + "/admin/login")
         authorization_url, state = discord.authorization_url(
             AUTHORIZATION_BASE_URL,
             access_type="offline"
@@ -192,31 +183,8 @@ def logout():
     return redirect(url_for('verify'))
 
 @app.route('/list')
-def user_list():
-    return redirect(url_for('admin'), code=302)
-
-# @require_auth
-# def user_list():
-#     user_servers = []
-#     users = []
-
-#     user = get_discord_user(session['discord_api_token'])
-#     guilds = get_user_guilds(session['discord_api_token'])
-#     servers = sorted(
-#         get_user_managed_servers(user, guilds),
-#         key=lambda s: s['name'].lower()
-#     )
-
-#     user_servers = []
-#     for server in servers:
-#         #print(server['id'] + ' : ' + server['name'])
-#         if(server['id'] in ALLOWED_SERVER_IDS):
-#             user_servers.append(server)
-
-#     if(len(user_servers) > 0):
-#         return render_template('list.html', users=list(db.table("users").run()), states=['verified','unverified','banned'], user=user, user_servers=user_servers)
-#     else:
-#         return "You are not admin on any valid servers :("
+def user_list_redir():
+    return redirect(url_for('user_list'), code=302)
 
 @app.route('/admin')
 @require_auth
@@ -242,11 +210,71 @@ def admin():
     else:
         return "You are not admin on any valid servers :("
 
+@app.route('/admin/list')
+@require_auth
+def user_list():
+    user_servers = []
+    users = []
+
+    user = get_discord_user(session['discord_api_token'])
+    guilds = get_user_guilds(session['discord_api_token'])
+    servers = sorted(
+        get_user_managed_servers(user, guilds),
+        key=lambda s: s['name'].lower()
+    )
+
+    user_servers = []
+    for server in servers:
+        if(server['id'] in ALLOWED_SERVER_IDS):
+            user_servers.append(server)
+
+    if(len(user_servers) > 0):
+        return render_template('list.html', users=list(db.table("users").order_by(index=db.desc('verified_at')).run()), user=user, user_servers=user_servers)
+    else:
+        return "You are not admin on any valid servers :("
+
 @app.route('/ajax/stats')
+@require_auth
 def ajax_stats():
-#    id = request.args.get('id')
-#    state = request.args.get('state')
-    return jsonify([ts['verified_at'] for ts in list(db.table('users').between(1498867200, 1501286400, index='verified_at').order_by(index='verified_at').run())])
+    range = request.args.get('range') or 'week'
+
+    today = dt.today().replace(hour=0, minute=0, second=0, microsecond=0)
+    upper = today + timedelta(days=1) # Add an extra day, otherwise today wont be included
+
+    if range == 'week':
+        lower = today - timedelta(weeks=1)
+
+    if range == 'month':
+        lower = today - timedelta(days=30)
+
+    if range == 'year':
+        lower = today - timedelta(days=365)
+
+    dates = {}
+
+    for user in list(db.table('users').between(lower.timestamp(), upper.timestamp(), index='verified_at').order_by(index='verified_at').run()):
+        date = dt.fromtimestamp(user['verified_at']).date().isoformat()
+
+        if date not in dates:
+            dates[date] = 1
+
+        else:
+            dates[date] += 1
+
+    return jsonify(dates)
+
+@app.route('/ajax/list')
+@require_auth
+def ajax_list():
+    users = list(db.table("users").order_by(index=db.desc('verified_at')).limit(25).run())
+
+    return jsonify([{
+            'id': user['id'],
+            'reddit': user['reddit']['name'],
+            'discord': user['discord']['name'],
+            'state': user['state'],
+            'verified_at': user['verified_at'],
+        } for user in users])
 
 @app.route('/static/<path:path>')
 def send_static(path):
@@ -279,7 +307,7 @@ def get_discord_user(token):
                 return {"status": "error", "message": "Error, that account is already affiliated", "link": "<a href='/'>Return to Verify</a>"}
 
         base = db.table("users").filter({"reddit": {"name":session["reddit_user"]}})
-        base.update({"discord": user, "state": "verified", "verified_at": dt.now().timestamp()}).run()
+        base.update({"discord": user, "state": "verified", "verified_at": dt.utcnow().timestamp()}).run()
 
         # Add the ID of that to the queue
         db.table("queue").insert([{'ref': list(base.run())[0]['id']}]).run()
@@ -428,6 +456,12 @@ def make_reddit_session(token=None, state=None, scope=None):
         auto_refresh_url=None,
         token_updater=None
     )
+
+# FILTERS
+
+@app.template_filter('datetimeformat')
+def datetimeformat(timestamp):
+    return dt.utcfromtimestamp(timestamp).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 if __name__ == '__main__':
     app.run(debug=True)
