@@ -116,7 +116,7 @@ def login_discord():
 def admin_login():
     confirm = confirm_login(DISCORD_REDIRECT_BASE_URI + "/admin/login")
     if confirm == True:
-        return redirect(url_for('user_list'))
+        return redirect(url_for('admin'))
 
     if confirm:
         return confirm
