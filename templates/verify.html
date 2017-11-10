@@ -7,7 +7,11 @@
 			{% if 'reddit_user' not in session %}
 			<ul>
 				<h5>Requirements:</h5>
-				<p>Your reddit account must either: be greater than 7 days old, and have 10 link karma, or 20 comment karma or be greater than 1 month old</p>
+				<p>Your reddit account must either:</p>
+				<ul>
+					<li>be greater than 7 days old, and have greater than 10 link karma or 20 comment karma</li>
+					<li>be greater than 1 month old</li>
+				</ul>
 			</ul>
 			{% elif ('discord_user' in session) and ('reddit_user' in session) %}
 			<ul>
@@ -16,7 +20,7 @@
 				<p>This breaks all the time for no reason.</p>
 			</ul>
 			{% endif %}
-			<ul class="login">				
+			<ul class="login">
 				<li class="reddit {{ 'connected' if 'reddit_user' in session }}"><a href="{{ 'https://reddit.com/u/' + session.reddit_user if 'reddit_user' in session else '/login/reddit'}}">
 					<svg viewBox="0 0 35.5 29.7">
 						<path d="M35.5,14.5c0-2.2-1.8-3.9-3.9-3.9c-1.1,0-2,0.4-2.7,1.1c-2.7-1.8-6.3-2.9-10.3-3.1l2.2-6.9l5.9,1.4c0,0,0,0.1,0,0.1
