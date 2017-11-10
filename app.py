@@ -97,7 +97,27 @@ def require_auth(f):
 @app.route('/login/discord')
 def login_discord():
     confirm = confirm_login(DISCORD_REDIRECT_BASE_URI + "/login/discord")
-    if confirm == True:
+    if isinstance(confirm, dict):
+        # Save that to the db
+        if("reddit_user" in session):
+            data = list(db.table("users").filter({"discord": {"name": confirm['name']}}).run())
+
+            if('reddit' in data):
+                if(data['reddit']['name'] != session['reddit_user']):
+                    return {"status": "error", "message": "Error, that account is already affiliated", "link": "<a href='/'>Return to Verify</a>"}
+
+            base = db.table("users").filter({"reddit": {"name":session["reddit_user"]}})
+            base.update({"discord": confirm, "state": "verified", "verified_at": dt.utcnow().timestamp()}).run()
+
+            # Add the ID of that to the queue
+            db.table("queue").insert([{'ref': list(base.run())[0]['id']}]).run()
+        else:
+
+            if not(list(db.table("users").filter({"discord": {"name": confirm['name']}}).run())):
+                db.table("users").insert([{"discord": confirm, "state": "unverified"}]).run()
+            else:
+                db.table("users").filter({"discord": {"name": confirm["name"]}}).update({"discord": confirm}).run()
+
         return redirect(url_for('verify'))
 
     if confirm:
@@ -116,7 +136,7 @@ def login_discord():
 @app.route('/admin/login')
 def admin_login():
     confirm = confirm_login(DISCORD_REDIRECT_BASE_URI + "/admin/login")
-    if confirm == True:
+    if isinstance(confirm, dict):
         return redirect(url_for('admin'))
 
     if confirm:
@@ -295,26 +315,6 @@ def get_discord_user(token):
     #Build username
     user["name"] = user['username'] + "#" + user['discriminator']
 
-    # Save that to the db
-    if("reddit_user" in session):
-        data = list(db.table("users").filter({"discord": {"name": user['name']}}).run())
-
-        if('reddit' in data):
-            if(data['reddit']['name'] != session['reddit_user']):
-                return {"status": "error", "message": "Error, that account is already affiliated", "link": "<a href='/'>Return to Verify</a>"}
-
-        base = db.table("users").filter({"reddit": {"name":session["reddit_user"]}})
-        base.update({"discord": user, "state": "verified", "verified_at": dt.utcnow().timestamp()}).run()
-
-        # Add the ID of that to the queue
-        db.table("queue").insert([{'ref': list(base.run())[0]['id']}]).run()
-    else:
-
-        if not(list(db.table("users").filter({"discord": {"name": user['name']}}).run())):
-            db.table("users").insert([{"discord": user, "state": "unverified"}]).run()
-        else:
-            db.table("users").filter({"discord": {"name": user["name"]}}).update({"discord": user}).run()
-
     # Save that to the session for easy template access
     session["discord_user"] = user["name"]
 
@@ -393,7 +393,7 @@ def confirm_login(redirect_uri):
         session.permanent = True
         session['discord_api_token'] = discord_api_token
 
-        return True
+        return user
 
 def get_user_guilds(token):
     # If it's an api_token, go fetch the discord_token
