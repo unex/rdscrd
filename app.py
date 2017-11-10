@@ -277,10 +277,6 @@ def ajax_list():
             'verified_at': user['verified_at'],
         } for user in users])
 
-@app.route('/static/<path:path>')
-def send_static(path):
-    return '//reddiscord.synesis.co/{}'.format(path)
-
 ''' ------------------------------------------------------------------------- '''
 
 def get_discord_user(token):
