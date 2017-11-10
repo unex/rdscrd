@@ -9,8 +9,9 @@ from itsdangerous import JSONWebSignatureSerializer
 from flask import Flask, render_template, url_for, redirect, g, request, session, send_from_directory, abort, jsonify
 
 # RETHINKDB
-RETHINKDB_HOST = os.environ.get("DOCKHERO_HOST")
+RETHINKDB_HOST = os.environ.get("RETHINKDB_HOST")
 RETHINKDB_DB = os.environ.get("RETHINKDB_DB")
+RETHINKDB_USER = os.environ.get("RETHINKDB_USER")
 RETHINKDB_PASSWORD = os.environ.get("RETHINKDB_PASSWORD")
 
 # DISCORD API
@@ -42,7 +43,7 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'this_should_be_configur
 @app.before_request
 def before_request():
     try:
-        g.db_conn = db.connect(host=RETHINKDB_HOST, port=28015, db=RETHINKDB_DB, password=RETHINKDB_PASSWORD).repl()
+        g.db_conn = db.connect(host=RETHINKDB_HOST, port=28015, db=RETHINKDB_DB, user=RETHINKDB_USER, password=RETHINKDB_PASSWORD).repl()
     except db.errors.ReqlDriverError:
         error = {
             'message': 'o fucc this should never happen you should tell someone <br><br> ReqlDriverError'

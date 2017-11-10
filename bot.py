@@ -9,8 +9,9 @@ from datetime import datetime as dt
 load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 
 # RETHINKDB
-RETHINKDB_HOST = os.environ.get("DOCKHERO_HOST")
+RETHINKDB_HOST = os.environ.get("RETHINKDB_HOST")
 RETHINKDB_DB = os.environ.get("RETHINKDB_DB")
+RETHINKDB_USER = os.environ.get("RETHINKDB_USER")
 RETHINKDB_PASSWORD = os.environ.get("RETHINKDB_PASSWORD")
 
 # DISCORD
@@ -22,14 +23,14 @@ VERIFIED_ROLE = '190693397856649216'
 
 client = discord.Client()
 
-db.connect(RETHINKDB_HOST, 28015, db=RETHINKDB_DB, password=RETHINKDB_PASSWORD).repl()
+db.connect(host=RETHINKDB_HOST, port=28015, db=RETHINKDB_DB, user=RETHINKDB_USER, password=RETHINKDB_PASSWORD).repl()
 db.set_loop_type("asyncio")
 
 async def monitor_db():
     #Monitor DB for changes
     while True:
         try:
-            conn = await db.connect(RETHINKDB_HOST, 28015, db=RETHINKDB_DB, password=RETHINKDB_PASSWORD) # connect
+            conn = await db.connect(host=RETHINKDB_HOST, port=28015, db=RETHINKDB_DB, user=RETHINKDB_USER, password=RETHINKDB_PASSWORD) # connect
             feed = await db.table("queue").changes().run(conn) # grab the feed
             print("Monitoring DB")
             while (await feed.fetch_next()): # iterate over the feed
