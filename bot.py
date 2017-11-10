@@ -3,7 +3,10 @@ import time
 import discord
 import asyncio
 import rethinkdb as db
+from dotenv import load_dotenv
 from datetime import datetime as dt
+
+load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 
 # RETHINKDB
 RETHINKDB_HOST = os.environ.get("DOCKHERO_HOST")
