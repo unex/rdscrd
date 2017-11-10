@@ -111,12 +111,6 @@ def login_discord():
 
             # Add the ID of that to the queue
             db.table("queue").insert([{'ref': list(base.run())[0]['id']}]).run()
-        else:
-
-            if not(list(db.table("users").filter({"discord": {"name": confirm['name']}}).run())):
-                db.table("users").insert([{"discord": confirm, "state": "unverified"}]).run()
-            else:
-                db.table("users").filter({"discord": {"name": confirm["name"]}}).update({"discord": confirm}).run()
 
         return redirect(url_for('verify'))
 
@@ -137,6 +131,9 @@ def login_discord():
 def admin_login():
     confirm = confirm_login(DISCORD_REDIRECT_BASE_URI + "/admin/login")
     if isinstance(confirm, dict):
+        if not(list(db.table("users").filter({"discord": {"name": confirm['name']}}).run())):
+                db.table("users").insert([{"discord": confirm, "state": "unverified"}]).run()
+
         return redirect(url_for('admin'))
 
     if confirm:
@@ -315,6 +312,11 @@ def get_discord_user(token):
     #Build username
     user["name"] = user['username'] + "#" + user['discriminator']
 
+    if not(list(db.table("users").filter({"discord": {"name": user['name']}}).run())):
+        db.table("users").insert([{"discord": user, "state": "unverified"}]).run()
+    else:
+        db.table("users").filter({"discord": {"name": user["name"]}}).update({"discord": user}).run()
+
     # Save that to the session for easy template access
     session["discord_user"] = user["name"]
 
@@ -384,7 +386,7 @@ def confirm_login(redirect_uri):
         serializer = JSONWebSignatureSerializer(app.config['SECRET_KEY'])
         api_key = str(serializer.dumps({'user_id': user['id']}))
         # Store api_key and token
-        db.table("users").filter({"discord": {"name": user['name']}}).update({"discord": {"api_key": api_key, "token": discord_token}}).run()
+        db.table("users").filter({"discord": {"id": user['id']}}).update({"discord": {"api_key": api_key, "token": discord_token}}).run()
         # Store api_token in client session
         discord_api_token = {
             'api_key': api_key,
