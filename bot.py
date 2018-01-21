@@ -150,10 +150,11 @@ async def on_message(message):
 
 @client.event
 async def on_member_join(member):
-    data = list(db.table("users").filter({"discord": { "id": member.id}}).run())
+    data = list(db.table("users").filter({"discord": { "id": str(member.id)}}).run())
 
     if(data and data[0]['state'] == 'verified'):
             await set_verified(member.id)
+
 @client.event
 async def on_member_ban(member):
     db.table("users").filter({"discord": { "id": member.id}}).update({"state": "banned", "method": "py"}).run()
@@ -191,12 +192,12 @@ while True:
         loop.run_until_complete(client.connect())
 
     except Exception as e:
-        print(str(e))
+        print('Error in main loop: {}'.format(e))
         print('WAITING BEFORE TRYING AGAIN')
 
-        loop.run_until_complete(client.close())
+        # loop.run_until_complete(client.close())
 
-    finally:
-        loop.close()
+    # finally:
+    #     loop.close()
 
     time.sleep(10)
