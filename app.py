@@ -259,7 +259,7 @@ def user_list():
 def ajax_stats():
     range = request.args.get('range') or 'week'
 
-    today = dt.today().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = dt.utcnow()
     upper = today + timedelta(days=1) # Add an extra day, otherwise today wont be included
 
     if range == 'week':
