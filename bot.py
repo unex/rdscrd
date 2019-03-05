@@ -2,17 +2,18 @@ import os
 import time
 import discord
 import asyncio
-import rethinkdb as db
+import motor.motor_asyncio
 from dotenv import load_dotenv
 from datetime import datetime as dt
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 
 # RETHINKDB
-RETHINKDB_HOST = os.environ.get("RETHINKDB_HOST")
-RETHINKDB_DB = os.environ.get("RETHINKDB_DB")
-RETHINKDB_USER = os.environ.get("RETHINKDB_USER")
-RETHINKDB_PASSWORD = os.environ.get("RETHINKDB_PASSWORD")
+DB_HOST = os.environ.get("DB_HOST")
+DB_PORT = os.environ.get("DB_PORT")
+DB_DB = os.environ.get("DB_DB")
+DB_USER = os.environ.get("DB_USER")
+DB_PASSWORD = os.environ.get("DB_PASSWORD")
 
 # DISCORD
 DISCORD_CLIENT_ID = os.environ.get("DISCORD_CLIENT_ID")
@@ -23,25 +24,22 @@ VERIFIED_ROLE = 190693397856649216
 
 client = discord.Client()
 
-db.connect(host=RETHINKDB_HOST, port=28015, db=RETHINKDB_DB, user=RETHINKDB_USER, password=RETHINKDB_PASSWORD).repl()
-db.set_loop_type("asyncio")
+mongo = motor.motor_asyncio.AsyncIOMotorClient(host=DB_HOST, port=int(DB_PORT), username=DB_USER, password=DB_PASSWORD, authSource=DB_DB, authMechanism='SCRAM-SHA-1')
+db = mongo[DB_DB]
 
 async def monitor_db():
     #Monitor DB for changes
     while True:
         try:
-            conn = await db.connect(host=RETHINKDB_HOST, port=28015, db=RETHINKDB_DB, user=RETHINKDB_USER, password=RETHINKDB_PASSWORD) # connect
-            feed = await db.table("queue").changes().run(conn) # grab the feed
             print("Monitoring DB")
-            while (await feed.fetch_next()): # iterate over the feed
-                change = await feed.next() # grab the changes
-                if change['new_val']:
-                    user = db.table("users").get(change['new_val']['ref']).run()
+            async for change in db.queue.watch():
+                if change["operationType"] == "insert":
+                    user = await db.users.find_one({"_id": change["fullDocument"]["ref"]})
 
-                    if user['state'] == 'verified':
+                    if user.get("verified"):
                         await set_verified(user['discord']['id'])
 
-                    db.table("queue").get(change['new_val']['id']).delete().run()
+                        db.queue.find_one_and_delete({"_id": change["fullDocument"]['_id']})
 
         except Exception as e:
             print('ERROR MONITORING DB: {}'.format(e))
@@ -55,21 +53,21 @@ async def on_ready():
     print('-----------------------------------------')
 
     #First we check the queue for any old additions if this garbage was down
-    backlog = list(db.table("queue").run())
+    backlog = await db.queue.find({}).to_list(None)
 
     if(backlog):
         print('Catching up, one sec')
 
         for item in backlog:
-            user = db.table("users").get(item['ref']).run()
+            user = await db.users.find_one({"_id": item["ref"]})
 
-            if user['state'] == 'verified':
+            if user.get("verified"):
                 await set_verified(user['discord']['id'])
 
             else:
                 print('Weird, {} was in the queue but is not verified.'.format(item['ref']))
 
-            db.table("queue").get(item['id']).delete().run()
+            db.queue.find_one_and_delete({"_id": item['_id']})
 
 @client.event
 async def on_message(message):
@@ -90,7 +88,7 @@ async def on_message(message):
 
         if message.mentions:
             for user in message.mentions:
-                data = list(db.table("users").filter({"discord": { "id": user.id}}).run())
+                data = await db.users.find_one({"discord.id": str(user.id)})
 
                 records.append([
                         f'<@{user.id}>',
@@ -98,11 +96,11 @@ async def on_message(message):
                     ])
 
         if records:
-            await client.send_message(message.channel, '**Whois Results:**\n{}'.format(''.join(str(r[0] + ': ' + (r[1] or 'None') + '\n') for r in records)))
+            await message.channel.send('**Whois Results:**\n{}'.format(''.join(str(r[0] + ': ' + (r[1] or 'None') + '\n') for r in records)))
 
-    elif not message.channel.name:
+    elif not hasattr(message.channel, "name"):
         if message.content.startswith('!status'):
-            data = list(db.table("users").filter({"discord": { "id": message.author.id}}).run())
+            data = await db.users.find_one({"discord.id": str(message.author.id)})
             if data:
                 await message.channel.send(f'**STATUS**\n \
                     Verified: {data.get("verified", False)} \n \
@@ -151,20 +149,20 @@ async def on_message(message):
 
 @client.event
 async def on_member_join(member):
-    data = list(db.table("users").filter({"discord": { "id": str(member.id)}}).run())
+    data = db.users.find_one({"discord.id": str(member.id)})
 
-    if(data and data[0]['state'] == 'verified'):
+    if(data and data.get("verified")):
             await set_verified(member.id)
 
 @client.event
 async def on_member_ban(member):
-    db.table("users").filter({"discord": { "id": member.id}}).update({"state": "banned", "method": "py"}).run()
-    print('BANNED {0} ON {1}'.format(member.name + '#' + member.discriminator, member.server.name))
+    db.users.find_one_and_update({"discord.id": member.id}, {"verified": False, "banned": True})
+    print(f'BANNED {member.name + "#" + member.discriminator} ON {member.server.name}')
 
 @client.event
 async def on_member_unban(server, user):
-    db.table("users").filter({"discord": { "id": user.id}}).update({"state": "verified", "method": "py"}).run()
-    print('UNBANNED {0} ON {1}'.format(user.name + '#' + user.discriminator, server.name))
+    db.users.find_one_and_update({"discord.id": user.id}, {"banned": False})
+    print(f'UNBANNED {user.name + "#" + user.discriminator} ON {server.name}')
 
 async def set_verified(member_id):
     server = client.get_guild(DISCORD_SERVER) # Get serer object from ID
