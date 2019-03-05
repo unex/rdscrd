@@ -15,6 +15,7 @@ asyncio = "*"
 discord-py = {git = "https://github.com/Rapptz/discord.py.git",ref = "rewrite"}
 pymongo = "*"
 motor = "*"
+python-dotenv = "*"
 
 [requires]
 python_version = "3.7"
