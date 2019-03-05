@@ -110,43 +110,43 @@ async def on_message(message):
             else:
                 await client.send_message(message.channel, "This account is not currently verified")
 
-        elif message.content.startswith('!unverify'):
-            user = db.table("users").filter({"discord": { "id": message.author.id}})
-            data = list(user.run())
-            if(data):
+        # elif message.content.startswith('!unverify'):
+        #     user = db.table("users").filter({"discord": { "id": message.author.id}})
+        #     data = list(user.run())
+        #     if(data):
 
-                server = client.get_server(DISCORD_SERVER) # Get serer object from ID
-                role = discord.utils.get(server.roles, id=VERIFIED_ROLE) # Get role object of verified role by ID
-                member = server.get_member(message.author.id) # Get member object by discord user ID
+        #         server = client.get_server(DISCORD_SERVER) # Get serer object from ID
+        #         role = discord.utils.get(server.roles, id=VERIFIED_ROLE) # Get role object of verified role by ID
+        #         member = server.get_member(message.author.id) # Get member object by discord user ID
 
-                if not member:
-                    await client.send_message(message.channel, 'You are not a member of the server.')
+        #         if not member:
+        #             await client.send_message(message.channel, 'You are not a member of the server.')
 
-                elif(data[0]['state'] == 'banned'):
-                    await client.send_message(message.channel, 'Banned users cannot unlink their accounts.')
+        #         elif(data[0]['state'] == 'banned'):
+        #             await client.send_message(message.channel, 'Banned users cannot unlink their accounts.')
 
-                else:
-                    await client.send_message(message.channel, 'Are you sure? Please type !confirm to confirm, or !cancel to cancel.\nThis request will expire in 30 seconds.')
+        #         else:
+        #             await client.send_message(message.channel, 'Are you sure? Please type !confirm to confirm, or !cancel to cancel.\nThis request will expire in 30 seconds.')
 
-                    msg = await client.wait_for_message(author=message.author, timeout=30)
+        #             msg = await client.wait_for_message(author=message.author, timeout=30)
 
-                    if not msg:
-                        await client.send_message(message.channel, 'Request expired')
+        #             if not msg:
+        #                 await client.send_message(message.channel, 'Request expired')
 
-                    elif msg.content.startswith('!confirm'):
-                        try:
-                            await client.remove_roles(member, role)
+        #             elif msg.content.startswith('!confirm'):
+        #                 try:
+        #                     await client.remove_roles(member, role)
 
-                        except Exception as e:
-                            print("ERROR REMOVING ROLE FOR {0} IN {1}: {2}".format(message.author, server.name, e))
+        #                 except Exception as e:
+        #                     print("ERROR REMOVING ROLE FOR {0} IN {1}: {2}".format(message.author, server.name, e))
 
-                        user.delete().run()
-                        await client.send_message(message.channel, 'Your accounts have been unlinked.')
+        #                 user.delete().run()
+        #                 await client.send_message(message.channel, 'Your accounts have been unlinked.')
 
-                    elif msg.content.startswith('!cancel'):
-                        await client.send_message(message.channel, 'Request cancelled.')
-            else:
-                await client.send_message(message.channel, 'Error, this account is not currently linked.')
+        #             elif msg.content.startswith('!cancel'):
+        #                 await client.send_message(message.channel, 'Request cancelled.')
+        #     else:
+        #         await client.send_message(message.channel, 'Error, this account is not currently linked.')
 
 @client.event
 async def on_member_join(member):
