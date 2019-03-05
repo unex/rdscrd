@@ -52,6 +52,8 @@ async def on_ready():
     print('Logged in as {0}, {1}'.format(client.user.name, client.user.id))
     print('-----------------------------------------')
 
+    await client.change_presence(activity=discord.Game("Reddiscord"))
+
     #First we check the queue for any old additions if this garbage was down
     backlog = await db.queue.find({}).to_list(None)
 
