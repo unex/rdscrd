@@ -3,17 +3,19 @@ from datetime import datetime as dt, timedelta
 
 import logging
 import requests
-import rethinkdb as db
+import pymongo
+from pymongo import MongoClient
 from functools import wraps
 from requests_oauthlib import OAuth2Session
 from itsdangerous import JSONWebSignatureSerializer
 from flask import Flask, render_template, url_for, redirect, g, request, session, send_from_directory, abort, jsonify
 
-# RETHINKDB
-RETHINKDB_HOST = os.environ.get("RETHINKDB_HOST")
-RETHINKDB_DB = os.environ.get("RETHINKDB_DB")
-RETHINKDB_USER = os.environ.get("RETHINKDB_USER")
-RETHINKDB_PASSWORD = os.environ.get("RETHINKDB_PASSWORD")
+# DATABASE
+DB_HOST = os.environ.get("DB_HOST")
+DB_PORT = os.environ.get("DB_PORT")
+DB_DB = os.environ.get("DB_DB")
+DB_USER = os.environ.get("DB_USER")
+DB_PASSWORD = os.environ.get("DB_PASSWORD")
 
 # DISCORD API
 DISCORD_CLIENT_ID = os.environ.get("DISCORD_CLIENT_ID")
@@ -42,37 +44,27 @@ app.logger.setLevel(logging.DEBUG)
 
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'this_should_be_configured')
 
-# open connection before each request
-@app.before_request
-def before_request():
-    try:
-        g.db_conn = db.connect(host=RETHINKDB_HOST, port=28015, db=RETHINKDB_DB, user=RETHINKDB_USER, password=RETHINKDB_PASSWORD).repl()
-    except db.errors.ReqlDriverError:
-        error = {
-            'message': 'o fucc this should never happen you should tell someone <br><br> ReqlDriverError'
-        }
-        return render_template('error.html', session=session,  error=error)
-
-# close the connection after each request
-@app.teardown_request
-def teardown_request(exception):
-    try:
-        g.db_conn.close()
-    except AttributeError:
-        pass
+mongo = MongoClient(host=DB_HOST, port=int(DB_PORT), username=DB_USER, password=DB_PASSWORD, authSource=DB_DB, authMechanism='SCRAM-SHA-1')
+db = mongo[DB_DB]
 
 @app.route('/')
 def verify():
     if "reddit_user" in session and "discord_user" in session:
+        # Both reddit and discord instances are avaliable, good to go.
         pass
     elif "reddit_user" in session:
-        discord_user = list(db.table("users").filter({ "reddit": {"name": session['reddit_user']}}).run())[0]
+        # Attempt to load the discord instance from the reddit instance,
+        # if it exists.
+        discord_user = db.users.find_one({"reddit.id": session["reddit_user"]["id"]}) or []
         if 'discord' in discord_user:
-            session["discord_user"] = discord_user["discord"]["name"]
+            session["discord_user"] = {k:v for (k,v) in discord_user["discord"].items() if k in ["id", "name"]}
     elif "discord_user" in session:
-        reddit_user = list(db.table("users").filter({ "discord": {"name": session['discord_user']}}).run())[0]
-        if 'reddit' in reddit_user:
-            session["reddit_user"] = reddit_user["reddit"]["name"]
+        # If a Discord user is logged in, but not reddit, and no
+        # reddit account is associated, remove from the db and start over.
+        if 'reddit' not in db.users.find_one({"discord.id": session["discord_user"]["id"]}):
+            db.users.find_one_and_delete({"discord.id": session["discord_user"]["id"]})
+
+        return redirect(url_for('logout'))
 
     return render_template('verify.html', session=session)
 
@@ -90,7 +82,7 @@ def require_auth(f):
             return redirect(url_for('admin_login'))
 
         # Does his api_key is in the db?
-        user_api_key = list(db.table("users").filter({"discord": {"id": api_token['user_id']}}).run())[0]['discord']['api_key']
+        user_api_key = db.users.find_one({"discord.id": api_token["user_id"]})["discord"]["api_key"]
         if user_api_key != api_token['api_key']:
             return redirect(url_for('logout'))
 
@@ -99,26 +91,42 @@ def require_auth(f):
 
 @app.route('/login/discord')
 def login_discord():
-    confirm = confirm_login(DISCORD_REDIRECT_BASE_URI + "/login/discord")
-    if isinstance(confirm, dict):
-        # Save that to the db
+    user = confirm_login(DISCORD_REDIRECT_BASE_URI + "/login/discord")
+    if isinstance(user, dict):
+        # Save that to the db if there is a reddit instance
         if("reddit_user" in session):
-            data = list(db.table("users").filter({"discord": {"name": confirm['name']}}).run())
+            reddit_user = db.users.find_one({"discord.id": user["id"]})
+            discord_user = db.users.find_one({"reddit.id": session["reddit_user"]["id"]})
 
-            if('reddit' in data):
-                if(data['reddit']['name'] != session['reddit_user']):
-                    return {"status": "error", "message": "Error, that account is already affiliated", "link": "<a href='/'>Return to Verify</a>"}
+            # Check if the reddit instance or discord instance already exist in the database.
+            # If one already exists but doesnt match the other, return an error
+            if (reddit_user and 'reddit' in reddit_user and reddit_user["reddit"]["id"] != session["reddit_user"]["id"]) \
+                or (discord_user and 'discord' in discord_user and discord_user["discord"]["id"] != user["id"]):
+                return "Error, that account is already affiliated <a href='/'>Return to Verify</a>"
 
-            base = db.table("users").filter({"reddit": {"name":session["reddit_user"]}})
-            base.update({"discord": confirm, "state": "verified", "verified_at": dt.utcnow().timestamp()}).run()
+            # If we update the whole discord obj, it gets rid of the auth
+            _id = db.users.find_one_and_update(
+                {"reddit.id": session["reddit_user"]["id"]},
+                {"$set": {
+                    "discord.id": user["id"],
+                    "discord.username": user["username"],
+                    "discord.discriminator": user["discriminator"],
+                    "discord.name": user["name"],
+                    "verified": True,
+                    "verified_at": dt.utcnow().timestamp()
+                    }}
+            )
+
+            # Save that to the session for easy template access
+            session["discord_user"] = {k:v for (k,v) in user.items() if k in ["id", "name"]}
 
             # Add the ID of that to the queue
-            db.table("queue").insert([{'ref': list(base.run())[0]['id']}]).run()
+            db.queue.insert_one({'ref': _id["_id"]})
 
         return redirect(url_for('verify'))
 
-    if confirm:
-        return confirm
+    if user:
+        return user
 
     else:
         scope = ['identify']
@@ -132,15 +140,14 @@ def login_discord():
 
 @app.route('/admin/login')
 def admin_login():
-    confirm = confirm_login(DISCORD_REDIRECT_BASE_URI + "/admin/login")
-    if isinstance(confirm, dict):
-        if not(list(db.table("users").filter({"discord": {"name": confirm['name']}}).run())):
-                db.table("users").insert([{"discord": confirm, "state": "unverified"}]).run()
+    user = confirm_login(DISCORD_REDIRECT_BASE_URI + "/admin/login")
+    if isinstance(user, dict):
+        session["discord_user"] = {k:v for (k,v) in user.items() if k in ["id", "name"]}
 
         return redirect(url_for('admin'))
 
-    if confirm:
-        return confirm
+    if user:
+        return user
 
     else:
         scope = ['identify', 'guilds']
@@ -183,7 +190,10 @@ def login_reddit():
         serializer = JSONWebSignatureSerializer(app.config['SECRET_KEY'])
 
         # Store api_key and token
-        db.table("users").filter({"reddit": { "name": user['name']}}).update({ "reddit": { "token": reddit_token}}).run()
+        db.users.update_one(
+            {"reddit.id": user['id']},
+            {"$set": {"reddit.token": reddit_token}}
+        )
 
         session.permanent = True
         return redirect(url_for('verify'))
@@ -250,7 +260,7 @@ def user_list():
             user_servers.append(server)
 
     if(len(user_servers) > 0):
-        return render_template('list.html', users=list(db.table("users").order_by(index=db.desc('verified_at')).run()), user=user, user_servers=user_servers)
+        return render_template('list.html', users=db.users.find(sort=[("verified_at", pymongo.ASCENDING)]), user=user, user_servers=user_servers)
     else:
         return "You are not admin on any valid servers :("
 
@@ -273,7 +283,7 @@ def ajax_stats():
 
     dates = {}
 
-    for user in list(db.table('users').between(lower.timestamp(), upper.timestamp(), index='verified_at').order_by(index='verified_at').run()):
+    for user in db.users.find({"verified_at": {"$gt": lower.timestamp(), "$lte": upper.timestamp()}}, sort=[('verified_at', pymongo.ASCENDING)]):
         date = dt.fromtimestamp(user['verified_at']).date().isoformat()
 
         if date not in dates:
@@ -287,14 +297,14 @@ def ajax_stats():
 @app.route('/ajax/list')
 @require_auth
 def ajax_list():
-    users = list(db.table("users").order_by(index=db.desc('verified_at')).limit(25).run())
+    users = db.users.find(sort=[("verified_at", pymongo.ASCENDING)], limit=25)
 
     return jsonify([{
-            'id': user['id'],
-            'reddit': user['reddit']['name'],
-            'discord': user['discord']['name'],
-            'state': user['state'],
-            'verified_at': user['verified_at'],
+            "id": str(user["_id"]),
+            "reddit": user["reddit"]["name"] if 'reddit' in user else None,
+            "discord": user["discord"]["name"] if 'discord' in user else None,
+            "verified": user.get("verified", None),
+            "verified_at": user.get("verified_at", None),
         } for user in users])
 
 ''' ------------------------------------------------------------------------- '''
@@ -302,7 +312,7 @@ def ajax_list():
 def get_discord_user(token):
     # If it's an api_token, go fetch the discord_token
     if token.get('api_key'):
-        token = list(db.table("users").filter({"discord":{"id": token['user_id']}}).run())[0]['discord']['token']
+        token = db.users.find_one({"discord.id": token['user_id']})['discord']['token']
 
     discord = make_discord_session(token=token)
 
@@ -312,16 +322,7 @@ def get_discord_user(token):
 
     user = req.json()
 
-    #Build username
-    user["name"] = user['username'] + "#" + user['discriminator']
-
-    if not(list(db.table("users").filter({"discord": {"name": user['name']}}).run())):
-        db.table("users").insert([{"discord": user, "state": "unverified"}]).run()
-    else:
-        db.table("users").filter({"discord": {"name": user["name"]}}).update({"discord": user}).run()
-
-    # Save that to the session for easy template access
-    session["discord_user"] = user["name"]
+    user["name"] = user["username"] + "#" + user["discriminator"]
 
     return user
 
@@ -333,17 +334,22 @@ def get_reddit_user(token):
 
     if(account_age and account_karma) or user['created'] < (dt.utcnow() + timedelta(-30)).timestamp():
         # Save that to the db
-        if("discord_user" in session): #If Discord user logged in
-            return redirect(url_for('logout'))
+        user = {k:v for (k,v) in user.items() if k in ["id", "name"]}
 
-        else:
-            if not(list(db.table("users").filter(db.row["reddit"]["name"] == user['name']).run())):
-                db.table("users").insert([{"reddit": user, "state": "unverified"}]).run()
-            else:
-                db.table("users").filter({"reddit": {"name": user['name']}}).update({"reddit": user}).run()
+        # Only save the reddit instance if it doesnt already exist.
+        # The users id and name never changes anyway.
+        db.users.find_one_and_update(
+            {"reddit.id": user["id"]},
+            {"$setOnInsert": {
+                "reddit": user,
+                "verified": False,
+                "role": False,
+                }},
+            upsert = True
+        )
 
         # Save that to the session for easy template access
-        session["reddit_user"] = user['name']
+        session["reddit_user"] = user
 
         return user
 
@@ -388,8 +394,15 @@ def confirm_login(redirect_uri):
         # Generate api_key from user_id
         serializer = JSONWebSignatureSerializer(app.config['SECRET_KEY'])
         api_key = str(serializer.dumps({'user_id': user['id']}))
-        # Store api_key and token
-        db.table("users").filter({"discord": {"id": user['id']}}).update({"discord": {"api_key": api_key, "token": discord_token}}).run()
+
+        db.users.find_one_and_update(
+            {"discord.id": user["id"]},
+            {"$set": {
+                "discord.api_key": api_key,
+                "discord.token": discord_token
+                }}
+        )
+
         # Store api_token in client session
         discord_api_token = {
             'api_key': api_key,
@@ -404,7 +417,7 @@ def get_user_guilds(token):
     # If it's an api_token, go fetch the discord_token
     if token.get('api_key'):
         user_id = token['user_id']
-        token = list(db.table("users").filter({"discord": { "id": user_id}}).run())[0]['discord']['token']
+        token = db.users.find_one({"discord.id": user_id})['discord']['token']
 
     else:
         user_id = get_discord_user(token)['id']
@@ -416,8 +429,7 @@ def get_user_guilds(token):
         abort(req.status_code)
 
     guilds = req.json()
-    # Saving that to the db
-    db.table("users").filter({"discord": {"id": user_id}}).update({"discord": {"guilds": guilds}}).run()
+
     return guilds
 
 
@@ -427,7 +439,10 @@ def get_user_managed_servers(user, guilds):
 def token_updater(discord_token):
     user = get_discord_user(discord_token)
     # Save the new discord_token
-    db.table("users").filter({"discord": {"id": user['id']}}).update({"discord": {"token": discord_token}}).run()
+    db.users.find_one_and_update(
+        {"reddit.id": session["reddit_user"]["id"]},
+        {"$set": {"discord.token": discord_token}}
+    )
 
 def make_discord_session(token=None, state=None, scope=None, redirect_uri=None):
     return OAuth2Session(
