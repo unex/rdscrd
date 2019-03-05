@@ -18,8 +18,8 @@ RETHINKDB_PASSWORD = os.environ.get("RETHINKDB_PASSWORD")
 DISCORD_CLIENT_ID = os.environ.get("DISCORD_CLIENT_ID")
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
 
-DISCORD_SERVER = '185565668639244289'
-VERIFIED_ROLE = '190693397856649216'
+DISCORD_SERVER = 185565668639244289
+VERIFIED_ROLE = 190693397856649216
 
 client = discord.Client()
 
@@ -74,13 +74,13 @@ async def on_ready():
 @client.event
 async def on_message(message):
     if message.content.startswith('!test'):
-        await client.send_message(message.channel, "Test complete")
+        await message.channel.send_message("Test complete")
 
     elif message.content.startswith('!verification'):
-        await client.send_message(message.channel, "https://reddiscord.synesis.co/")
+        await message.channel.send_message("https://reddiscord.synesis.co/")
 
     elif message.content.startswith('!help'):
-        await client.send_message(message.channel, '\r\n**!status:** Shows your current verification status.\r\n**!unverify:** Un-links your reddit and Discord accounts.\r\n**!verification:** prints the verification URL.\r\n**!help:** shows this help message.')
+        await message.channel.send_message('\r\n**!status:** Shows your current verification status.\r\n**!unverify:** Un-links your reddit and Discord accounts.\r\n**!verification:** prints the verification URL.\r\n**!help:** shows this help message.')
 
     elif message.content.startswith('!whois'):
         if not is_mod(message.author):
@@ -93,8 +93,8 @@ async def on_message(message):
                 data = list(db.table("users").filter({"discord": { "id": user.id}}).run())
 
                 records.append([
-                        '<@' + user.id + '>',
-                        '/u/' + data[0]['reddit']['name'] if data else None
+                        f'<@{user.id}>',
+                        f'https://reddit.com/u/{data["reddit"]["name"] if data else None}'
                     ])
 
         if records:
@@ -104,11 +104,12 @@ async def on_message(message):
         if message.content.startswith('!status'):
             data = list(db.table("users").filter({"discord": { "id": message.author.id}}).run())
             if data:
-                data = data[0]
-
-                await client.send_message(message.channel, "\nState: {0}\nConnected reddit: /u/{1}\nConnected Discord: {2} (duh)".format(data['state'], data['reddit']['name'], data['discord']['name']))
+                await message.channel.send(f'**STATUS**\n \
+                    Verified: {data.get("verified", False)} \n \
+                    Connected reddit: https://reddit.com/u/{data["reddit"]["name"]} \n \
+                    Connected Discord: <@{data["discord"]["id"]}> (duh)')
             else:
-                await client.send_message(message.channel, "This account is not currently verified")
+                await message.channel.send("This account is not currently verified")
 
         # elif message.content.startswith('!unverify'):
         #     user = db.table("users").filter({"discord": { "id": message.author.id}})
@@ -166,22 +167,24 @@ async def on_member_unban(server, user):
     print('UNBANNED {0} ON {1}'.format(user.name + '#' + user.discriminator, server.name))
 
 async def set_verified(member_id):
-    server = client.get_server(DISCORD_SERVER) # Get serer object from ID
+    server = client.get_guild(DISCORD_SERVER) # Get serer object from ID
     role = discord.utils.get(server.roles, id=VERIFIED_ROLE) # Get role object of verified role by ID
-    member = server.get_member(member_id) # Get member object by discord user ID
+    member = server.get_member(int(member_id)) # Get member object by discord user ID
 
     if member: # Someone might verify before they join the server idk
         try:
-            await client.add_roles(member, role) # Add user as verified
-            await client.send_message(member, "Congratulations! You are now verified!") # Send the verified message
+            await member.add_roles(role) # Add user as verified
+            await member.send("Congratulations! You are now verified!") # Send the verified message
             print('VERIFIED {0} ON {1}'.format(member.name + '#' + member.discriminator, server.name))
 
         except Exception as e:
             print("ERROR ADDING ROLE FOR {0} IN {1}: {2}".format(member.name, server.name, e)) # Log an error if there was a problem
 
 def is_mod(member):
-    role = discord.utils.get(member.server.roles, id='185565928333770752')
-    return (member.server_permissions.administrator or role in member.roles)
+    server = client.get_guild(DISCORD_SERVER)
+    member = server.get_member(member.id)
+    role = discord.utils.get(member.roles, id=185565928333770752)
+    return (member.guild_permissions.administrator or role in member.roles)
 
 while True:
     loop = asyncio.get_event_loop()
