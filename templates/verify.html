@@ -21,7 +21,7 @@
 			</ul>
 			{% endif %}
 			<ul class="login">
-				<li class="reddit {{ 'connected' if 'reddit_user' in session }}"><a href="{{ 'https://reddit.com/u/' + session.reddit_user if 'reddit_user' in session else '/login/reddit'}}">
+				<li class="reddit {{ 'connected' if 'reddit_user' in session }}"><a href="{{ 'https://reddit.com/u/' + session.reddit_user.name if 'reddit_user' in session else '/login/reddit'}}">
 					<svg viewBox="0 0 35.5 29.7">
 						<path d="M35.5,14.5c0-2.2-1.8-3.9-3.9-3.9c-1.1,0-2,0.4-2.7,1.1c-2.7-1.8-6.3-2.9-10.3-3.1l2.2-6.9l5.9,1.4c0,0,0,0.1,0,0.1
 							c0,1.8,1.4,3.2,3.2,3.2c1.8,0,3.2-1.4,3.2-3.2S31.6,0,29.9,0c-1.4,0-2.5,0.9-3,2l-6.4-1.5c-0.3-0.1-0.6,0.1-0.7,0.4l-2.4,7.7
@@ -32,7 +32,7 @@
 							c0,0,0,0,0,0c2.3,0,3.9-0.5,4.9-1.4c0.2-0.2,0.6-0.2,0.8,0S23.6,23.9,23.4,24.2z M23.1,19.6c-1.3,0-2.3-1-2.3-2.3
 							c0-1.3,1-2.3,2.3-2.3c1.3,0,2.3,1,2.3,2.3C25.5,18.5,24.4,19.6,23.1,19.6z"/>
 					</svg>
-					<span>{{'/u/' + session.reddit_user if 'reddit_user' in session else 'Log in to reddit'}}</span>
+					<span>{{'/u/' + session.reddit_user.name if 'reddit_user' in session else 'Log in to reddit'}}</span>
 				</a></li>
 
 				{% if 'discord_user' in session or 'reddit_user' in session %}
@@ -48,7 +48,7 @@
 							c9.5,1.1,19.7,3.9,30.1,9.5c0,0-7.9-7.5-24.9-12.6l1.4-1.6c0,0,13.7-0.3,28,10.4c0,0,14.4,25.9,14.4,57.8
 							C146.4,114.4,138,128.8,115.9,129.5L115.9,129.5z"/>
 					</svg>
-					<span>{{session.discord_user or 'Log in to Discord'}}</span>
+					<span>{{session.discord_user.name if session.discord_user else 'Log in to Discord'}}</span>
 				</a></li>
 				{% endif %}
 			</ul>

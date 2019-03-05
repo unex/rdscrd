@@ -26,7 +26,7 @@
     <h3>Recent users</h3><a href="{{ url_for('user_list') }}">View all</a>
     <table id="users" class="striped centered">
         <thead>
-            <th>UUID</th><th>Reddit</th><th>Discord</th><th>State</th><th>Verified At</th>
+            <th>UUID</th><th>Reddit</th><th>Discord</th><th>Verified</th><th>Verified At</th>
         </thead>
         <tbody></tbody>
     </table>
@@ -107,7 +107,7 @@
             console.log(data)
 
             $(data).each(function () {
-                $('#users tbody').append('<tr><td>' + this.id + '</td><td><a href="//reddit.com/u/' + this.reddit + '" target="_blank">' + this.reddit + '</a></td><td>' + this.discord + '</td><td>' + this.state + '</td><td>' + new Date(this.verified_at * 1000).toUTCString() + '</td></tr>')
+                $('#users tbody').append('<tr><td>' + this.id + '</td><td><a href="//reddit.com/u/' + this.reddit + '" target="_blank">' + this.reddit + '</a></td><td>' + this.discord + '</td><td>' + this.verified + '</td><td>' + new Date(this.verified_at * 1000).toUTCString() + '</td></tr>')
             })
 
         })
