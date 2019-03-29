@@ -16,6 +16,9 @@ discord-py = {git = "https://github.com/Rapptz/discord.py.git",ref = "rewrite"}
 pymongo = "*"
 motor = "*"
 python-dotenv = "*"
+pipenv = "*"
+install = "*"
+derw = {git = "https://github.com/notderw/python-util"}
 
 [requires]
 python_version = "3.7"
