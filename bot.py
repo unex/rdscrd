@@ -72,13 +72,13 @@ async def on_ready():
 @client.event
 async def on_message(message):
     if message.content.startswith('!test'):
-        await message.channel.send_message("Test complete")
+        await message.channel.send("Test complete")
 
     elif message.content.startswith('!verification'):
-        await message.channel.send_message("https://reddiscord.synesis.co/")
+        await message.channel.send("https://reddiscord.synesis.co/")
 
     elif message.content.startswith('!help'):
-        await message.channel.send_message('\r\n**!status:** Shows your current verification status.\r\n**!unverify:** Un-links your reddit and Discord accounts.\r\n**!verification:** prints the verification URL.\r\n**!help:** shows this help message.')
+        await message.channel.send('\r\n**!status:** Shows your current verification status.\r\n**!unverify:** Un-links your reddit and Discord accounts.\r\n**!verification:** prints the verification URL.\r\n**!help:** shows this help message.')
 
     elif message.content.startswith('!whois'):
         if not is_mod(message.author):
