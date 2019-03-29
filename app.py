@@ -260,7 +260,7 @@ def user_list():
             user_servers.append(server)
 
     if(len(user_servers) > 0):
-        return render_template('list.html', users=db.users.find(sort=[("verified_at", pymongo.ASCENDING)]), user=user, user_servers=user_servers)
+        return render_template('list.html', users=db.users.find(sort=[("verified_at", pymongo.DESCENDING)]), user=user, user_servers=user_servers)
     else:
         return "You are not admin on any valid servers :("
 
@@ -283,7 +283,7 @@ def ajax_stats():
 
     dates = {}
 
-    for user in db.users.find({"verified_at": {"$gt": lower.timestamp(), "$lte": upper.timestamp()}}, sort=[('verified_at', pymongo.ASCENDING)]):
+    for user in db.users.find({"verified_at": {"$gt": lower.timestamp(), "$lte": upper.timestamp()}}, sort=[('verified_at', pymongo.DESCENDING)]):
         date = dt.fromtimestamp(user['verified_at']).date().isoformat()
 
         if date not in dates:
