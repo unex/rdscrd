@@ -283,7 +283,7 @@ def ajax_stats():
 
     dates = {}
 
-    for user in db.users.find({"verified_at": {"$gt": lower.timestamp(), "$lte": upper.timestamp()}}, sort=[('verified_at', pymongo.DESCENDING)]):
+    for user in db.users.find({"verified_at": {"$gt": lower.timestamp(), "$lte": upper.timestamp()}}, sort=[('verified_at', pymongo.ASCENDING)]):
         date = dt.fromtimestamp(user['verified_at']).date().isoformat()
 
         if date not in dates:
@@ -297,7 +297,7 @@ def ajax_stats():
 @app.route('/ajax/list')
 @require_auth
 def ajax_list():
-    users = db.users.find(sort=[("verified_at", pymongo.ASCENDING)], limit=25)
+    users = db.users.find(sort=[("verified_at", pymongo.DESCENDING)], limit=25)
 
     return jsonify([{
             "id": str(user["_id"]),
