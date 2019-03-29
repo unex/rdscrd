@@ -37,7 +37,7 @@ async def monitor_db():
                     if user.get("verified"):
                         await set_verified(user['discord']['id'])
 
-                        db.queue.find_one_and_delete({"_id": change["fullDocument"]['_id']})
+                        await db.queue.find_one_and_delete({"_id": change["fullDocument"]['_id']})
 
         except Exception as e:
             log.error(f'ERROR MONITORING DB: {e}')
@@ -67,7 +67,7 @@ async def on_ready():
             else:
                 log.warning(f'Weird, {item["ref"]} was in the queue but is not verified.')
 
-            db.queue.find_one_and_delete({"_id": item['_id']})
+            await db.queue.find_one_and_delete({"_id": item['_id']})
 
 @client.event
 async def on_message(message):
@@ -149,19 +149,19 @@ async def on_message(message):
 
 @client.event
 async def on_member_join(member):
-    data = db.users.find_one({"discord.id": str(member.id)})
+    data = await db.users.find_one({"discord.id": str(member.id)})
 
     if(data and data.get("verified")):
             await set_verified(member.id)
 
 @client.event
 async def on_member_ban(member):
-    db.users.find_one_and_update({"discord.id": member.id}, {"verified": False, "banned": True})
+    await db.users.find_one_and_update({"discord.id": member.id}, {"verified": False, "banned": True})
     log.info(f'BANNED {member.name + "#" + member.discriminator} ON {member.server.name}')
 
 @client.event
 async def on_member_unban(server, user):
-    db.users.find_one_and_update({"discord.id": user.id}, {"banned": False})
+    await db.users.find_one_and_update({"discord.id": user.id}, {"banned": False})
     log.info(f'UNBANNED {user.name + "#" + user.discriminator} ON {server.name}')
 
 async def set_verified(member_id):
