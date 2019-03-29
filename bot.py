@@ -4,6 +4,7 @@ import discord
 import asyncio
 import motor.motor_asyncio
 from datetime import datetime as dt
+from derw import log
 
 # RETHINKDB
 DB_HOST = os.environ.get("DB_HOST")
@@ -28,7 +29,7 @@ async def monitor_db():
     #Monitor DB for changes
     while True:
         try:
-            print("Monitoring DB")
+            log.info("Monitoring DB")
             async for change in db.queue.watch():
                 if change["operationType"] == "insert":
                     user = await db.users.find_one({"_id": change["fullDocument"]["ref"]})
@@ -39,15 +40,15 @@ async def monitor_db():
                         db.queue.find_one_and_delete({"_id": change["fullDocument"]['_id']})
 
         except Exception as e:
-            print('ERROR MONITORING DB: {}'.format(e))
-            print('WAITING BEFORE TRYING AGAIN')
+            log.error(f'ERROR MONITORING DB: {e}')
+            log.warning('WAITING BEFORE TRYING AGAIN')
             time.sleep(5)
 
 
 @client.event
 async def on_ready():
-    print('Logged in as {0}, {1}'.format(client.user.name, client.user.id))
-    print('-----------------------------------------')
+    log.info(f'Logged in as {client.user.name}, {client.user.id}')
+    log.info('-----------------------------------------')
 
     await client.change_presence(activity=discord.Game("Reddiscord"))
 
@@ -55,7 +56,7 @@ async def on_ready():
     backlog = await db.queue.find({}).to_list(None)
 
     if(backlog):
-        print('Catching up, one sec')
+        log.debug('Catching up, one sec')
 
         for item in backlog:
             user = await db.users.find_one({"_id": item["ref"]})
@@ -64,7 +65,7 @@ async def on_ready():
                 await set_verified(user['discord']['id'])
 
             else:
-                print('Weird, {} was in the queue but is not verified.'.format(item['ref']))
+                log.warning(f'Weird, {item["ref"]} was in the queue but is not verified.')
 
             db.queue.find_one_and_delete({"_id": item['_id']})
 
@@ -156,12 +157,12 @@ async def on_member_join(member):
 @client.event
 async def on_member_ban(member):
     db.users.find_one_and_update({"discord.id": member.id}, {"verified": False, "banned": True})
-    print(f'BANNED {member.name + "#" + member.discriminator} ON {member.server.name}')
+    log.info(f'BANNED {member.name + "#" + member.discriminator} ON {member.server.name}')
 
 @client.event
 async def on_member_unban(server, user):
     db.users.find_one_and_update({"discord.id": user.id}, {"banned": False})
-    print(f'UNBANNED {user.name + "#" + user.discriminator} ON {server.name}')
+    log.info(f'UNBANNED {user.name + "#" + user.discriminator} ON {server.name}')
 
 async def set_verified(member_id):
     server = client.get_guild(DISCORD_SERVER) # Get serer object from ID
@@ -172,10 +173,10 @@ async def set_verified(member_id):
         try:
             await member.add_roles(role) # Add user as verified
             await member.send("Congratulations! You are now verified!") # Send the verified message
-            print('VERIFIED {0} ON {1}'.format(member.name + '#' + member.discriminator, server.name))
+            log.info(f'VERIFIED {member.name}#{member.discriminator} ON {server.name}')
 
         except Exception as e:
-            print("ERROR ADDING ROLE FOR {0} IN {1}: {2}".format(member.name, server.name, e)) # Log an error if there was a problem
+            log.error(f'ERROR ADDING ROLE FOR {member.name}#{member.discriminator} IN {server.name}: {e}') # Log an error if there was a problem
 
 def is_mod(member):
     server = client.get_guild(DISCORD_SERVER)
@@ -192,8 +193,8 @@ while True:
         loop.run_until_complete(client.connect())
 
     except Exception as e:
-        print('Error in main loop: {}'.format(e))
-        print('WAITING BEFORE TRYING AGAIN')
+        log.critical(f'Error in main loop: {e}')
+        log.warning('WAITING BEFORE TRYING AGAIN')
 
         # loop.run_until_complete(client.close())
 
