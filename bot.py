@@ -3,10 +3,7 @@ import time
 import discord
 import asyncio
 import motor.motor_asyncio
-from dotenv import load_dotenv
 from datetime import datetime as dt
-
-load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 
 # RETHINKDB
 DB_HOST = os.environ.get("DB_HOST")
