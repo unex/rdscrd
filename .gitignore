@@ -2,3 +2,4 @@ undefined/
 __pycache__/
 .env
 .vscode
+*.log
