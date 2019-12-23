@@ -1,5 +1,6 @@
 body {
-	background-color: #fafafa;
+    color: #F5F5F5;
+	background-color: #212121;
 	min-height: 100vh;
 }
 
@@ -12,10 +13,8 @@ body {
 header {
     position: absolute;
     top: 0;
-	/*background-color: #2196F3;*/
 	height: 64px;
 	padding: 0 6%;
-    /*box-shadow: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);*/
 }
 
 header #logo {
@@ -27,11 +26,16 @@ header #logo {
 header #logo svg {
 	display: block;
 	height: 100%;
-	fill: #E0E0E0;
+	fill: rgba(255,255,255,.05);
 }
 
 #content {
     min-height: 100vh;
+}
+
+#content > .container {
+    margin-top: 64px;
+    margin-bottom: 64px;
 }
 
 #verify-container {
@@ -48,19 +52,17 @@ header #logo svg {
     max-width: 100%;
     flex: 0 0;
     align-self: center;
-    /*margin: 0 auto;*/
-    /*padding: 20vh 0;*/
 }
 
 #verify a {
-	color: #212121;
+	color: #F5F5F5;
 	transition: color .3s ease, background-color .3s ease;
 }
 
 #verify ul.login {
 	list-style-type: none;
 	border-radius: 2px;
-	background-color: #fff;
+	background-color: #424242;
     box-shadow: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
     overflow: hidden;
 }
@@ -69,48 +71,40 @@ header #logo svg {
 }
 
 #verify ul.login li:not(:last-of-type) {
-	border-bottom: 1px solid #EEEEEE;
+	border-bottom: 1px solid #212121;
 }
 
 #verify ul.login li.connected {
 	border-bottom: none;
 }
 
-#verify ul.login li a {
+#verify ul.login li > a {
 	display: block;
     padding: 0 20px;
 }
 
-#verify ul.login li a span {
+#verify ul.login li > a span {
     line-height: 64px;
     vertical-align: top;
 }
 
-#verify ul.login li a:hover {
+#verify ul.login li > a:hover {
 	background-color: rgba(0,0,0,.1);
 }
 
-#verify ul.login li a svg {
+#verify ul.login li > a svg {
 	display: inline-block;
-	fill: #212121;
+	fill: #F5F5F5;
     width: 32px;
     margin-right: 12px;
 }
 
-#verify ul.login li.discord a svg {
+#verify ul.login li.discord > a svg {
     margin-top: 15px;
 }
 
-#verify ul.login li.reddit a svg {
+#verify ul.login li.reddit > a svg {
     margin-top: 18px;
-}
-
-#verify ul.login li.connected a {
-	color: #fff;
-}
-
-#verify ul.login li.connected a svg {
-	fill: #fff;
 }
 
 #verify ul.login li.connected.reddit {
@@ -119,6 +113,26 @@ header #logo svg {
 
 #verify ul.login li.connected.discord {
 	background-color: rgb(114, 137, 218);
+}
+
+#verify ul.login li.discord > p {
+    margin: 0;
+    padding: 0 16px;
+    height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: all .3s ease-in-out;
+}
+
+#verify ul.login li.discord.active > p {
+    padding: 16px;
+    height: 136px;
+    opacity: 1;
+}
+
+#verify ul.login li.discord > p .btn {
+    float: right;
+    background: rgb(114, 137, 218);
 }
 
 #verify .logout {
@@ -131,15 +145,19 @@ header #logo svg {
 }
 
 #verify .logout:hover {
-	background-color: #E0E0E0;
+	background-color: #424242;
 }
 
 /* FOOTER */
 
 footer {
     padding: 48px 64px;
-    background: #fff;
+    background: #D81B60;
     bottom: 0;
+}
+
+footer a {
+    color: #FFFFFF;
 }
 
 footer #footer-logo {
@@ -151,6 +169,7 @@ footer #footer-logo {
 footer #footer-logo svg {
     display: block;
     height: 36px;
+    fill: currentColor;
 }
 
 body.home-page {
@@ -193,3 +212,12 @@ body.home-page #content .btn-large {
 
 ul.browser-default { padding-left: 16px; }
 ul.browser-default li { list-style-type: initial }
+
+.tabs,
+table.striped > tbody > tr:nth-child(2n+1) {
+    background: #424242;
+}
+
+thead {
+    border-bottom: 1px solid #212121;
+}
