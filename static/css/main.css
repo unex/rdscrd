@@ -153,7 +153,8 @@ header #logo svg {
 footer {
     padding: 48px 64px;
     background: #D81B60;
-    bottom: 0;
+    /* bottom: 0; */
+    line-height: 36px;
 }
 
 footer a {
@@ -161,15 +162,44 @@ footer a {
 }
 
 footer #footer-logo {
-    display: inline-block;
-    margin-top: 6px;
-    margin-bottom: -6px;
+    /* display: inline-block; */
 }
 
 footer #footer-logo svg {
     display: block;
     height: 36px;
     fill: currentColor;
+}
+
+footer .w-max {
+    display: flex;
+    justify-content: space-between;
+}
+
+footer ul {
+    /* display: inline-block; */
+    margin: 0;
+}
+
+footer ul li {
+    display: inline-block;
+}
+
+footer ul li a {
+    display: block;
+    font-size: 14px;
+    border-radius: 4px;
+    padding: 0 8px;
+    margin: 0 2px;
+    font-weight: 500;
+    letter-spacing: 1.25px;
+    text-transform: uppercase;
+    background: transparent;
+    transition: background-color .3s ease-in-out
+}
+
+footer ul li a:hover {
+    background: rgba(0,0,0,.1);
 }
 
 body.home-page {
