@@ -6,11 +6,14 @@ verify_ssl = true
 [dev-packages]
 
 [packages]
-requests = "*"
-flask = "*"
-requests-oauthlib = "*"
-pymongo = "*"
-python-dotenv = "*"
+fastapi = "*"
+uvicorn = "*"
+jinja2 = "*"
+aiofiles = "*"
+aioauth-client = "*"
+gunicorn = "*"
+itsdangerous = "*"
+motor = "*"
 
 [requires]
 python_version = "3.8"
