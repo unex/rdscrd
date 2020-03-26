@@ -5,12 +5,20 @@
 	<div id="verify-container">
 		<div id="verify">
 			{% if 'reddit' not in user %}
+			<div>
 				<h5>Requirements:</h5>
+				<p>Your reddit account must:</p>
+				<p>
+					be greater than 7 days old, with greater than 10 link karma or 20 comment karma
+					<span class="fancy-divider">OR</span>
+					be greater than 1 month old
+				</p>
+			</div>
 			{% elif ('discord' in user) and ('reddit' in user) %}
+			<div>
 				<h5>Verification Successful!</h5>
 				<p>If you still are unable to chat, or have any other issues, <a target="_blank" href="https://www.reddit.com/message/compose/?to=RenegadeAI&subject=Reddiscord">contact RenegadeAI</a>.</p>
-				<p>This breaks all the time for no reason.</p>
-			</ul>
+			</div>
 			{% endif %}
 			<ul class="login">
 				<li class="reddit {{ 'connected' if 'reddit' in user }}"><a href="{{ 'https://reddit.com/u/' + user.reddit.name if 'reddit' in user else '/login/reddit'}}">
