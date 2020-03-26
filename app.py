@@ -1,14 +1,27 @@
-import os, sys
+import os
+import sys
+import traceback
+
 from datetime import datetime as dt, timedelta
 
-import logging
-import requests
-import pymongo
-from pymongo import MongoClient
-from functools import wraps
-from requests_oauthlib import OAuth2Session
-from itsdangerous import JSONWebSignatureSerializer
-from flask import Flask, render_template, url_for, redirect, g, request, session, send_from_directory, abort, jsonify
+from fastapi import FastAPI, Request, Depends, HTTPException, status
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import RedirectResponse, JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
+from starlette.middleware.sessions import SessionMiddleware
+
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
+from pymongo import ReturnDocument, ASCENDING, DESCENDING
+from bson.objectid import ObjectId
+
+from aiohttp import BasicAuth
+from aioauth_client import OAuth2Client, DiscordClient
+from secrets import token_urlsafe
+
+from itsdangerous.url_safe import URLSafeSerializer
 
 # DATABASE
 DB_HOST = os.environ.get("DB_HOST")
@@ -20,255 +33,322 @@ DB_PASSWORD = os.environ.get("DB_PASSWORD")
 # DISCORD API
 DISCORD_CLIENT_ID = os.environ.get("DISCORD_CLIENT_ID")
 DISCORD_CLIENT_SECRET = os.environ.get("DISCORD_CLIENT_SECRET")
-DISCORD_REDIRECT_BASE_URI = os.environ.get("DISCORD_REDIRECT_BASE_URI")
-
-DISCORD_API_BASE_URL = 'https://discordapp.com/api'
-AUTHORIZATION_BASE_URL = DISCORD_API_BASE_URL + '/oauth2/authorize'
-TOKEN_URL = DISCORD_API_BASE_URL + '/oauth2/token'
 
 ALLOWED_SERVER_IDS = os.environ.get("ALLOWED_SERVER_IDS")
 
 # REDDIT API
 REDDIT_CLIENT_ID = os.environ.get("REDDIT_CLIENT_ID")
 REDDIT_CLIENT_SECRET = os.environ.get("REDDIT_CLIENT_SECRET")
-REDDIT_REDIRECT_URI = os.environ.get("REDDIT_REDIRECT_URI")
 
 REDDIT_API_BASE_URL = "https://www.reddit.com/api/v1"
 REDDIT_OAUTH_BASE_URL = "https://oauth.reddit.com/api/v1"
 
-app = Flask(__name__)
+# APP
+REDIRECT_URI_BASE = os.environ.get("REDIRECT_URI_BASE")
 
-app.logger.addHandler(logging.StreamHandler(sys.stdout))
-app.logger.setLevel(logging.DEBUG)
-# app.logger.debug('debug')
+SECRET_KEY = os.environ.get('SECRET_KEY', 'this_should_be_configured')
+SERIALIZER = URLSafeSerializer(SECRET_KEY)
 
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'this_should_be_configured')
+app = FastAPI()
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
 
-mongo = MongoClient(host=DB_HOST, port=int(DB_PORT), username=DB_USER, password=DB_PASSWORD, authSource=DB_DB, authMechanism='SCRAM-SHA-1')
-db = mongo[DB_DB]
+app.add_middleware(HTTPSRedirectMiddleware)
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
-@app.route('/')
-def verify():
-    if "reddit_user" in session and "discord_user" in session:
-        # Both reddit and discord instances are avaliable, good to go.
-        pass
-    elif "reddit_user" in session:
-        # Attempt to load the discord instance from the reddit instance,
-        # if it exists.
-        discord_user = db.users.find_one({"reddit.id": session["reddit_user"]["id"]}) or []
-        if 'discord' in discord_user:
-            session["discord_user"] = {k:v for (k,v) in discord_user["discord"].items() if k in ["id", "name"]}
-    elif "discord_user" in session:
-        # If a Discord user is logged in, but not reddit, and no
-        # reddit account is associated, remove from the db and start over.
-        if 'reddit' not in db.users.find_one({"discord.id": session["discord_user"]["id"]}):
-            db.users.find_one_and_delete({"discord.id": session["discord_user"]["id"]})
+mongo: AsyncIOMotorClient
+db: AsyncIOMotorCollection
 
-        return redirect(url_for('logout'))
+@app.on_event("startup")
+async def create_db_client():
+    global mongo, db
+    mongo = AsyncIOMotorClient(host=DB_HOST, port=int(DB_PORT), username=DB_USER, password=DB_PASSWORD, authSource=DB_DB, authMechanism='SCRAM-SHA-256')
+    await mongo.admin.command("ismaster")
+    db = mongo[DB_DB]
 
-    return render_template('verify.html', session=session)
 
-@app.route('/verify')
-def old_verify():
-    return redirect(url_for('verify'), code=302)
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    await mongo.close()
 
-def require_auth(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        # Does the user have an api_token?
-        api_token = session.get('discord_api_token')
 
-        if api_token is None:
-            return redirect(url_for('admin_login'))
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return templates.TemplateResponse("error.html", {"request": request, "session": request.session, "exc": exc}, status_code=exc.status_code)
 
-        # Does his api_key is in the db?
-        user_api_key = db.users.find_one({"discord.id": api_token["user_id"]})["discord"]["api_key"]
-        if user_api_key != api_token['api_key']:
-            return redirect(url_for('logout'))
 
-        return f(*args, **kwargs)
-    return wrapper
+class AdminAuthException(Exception):
+    pass
 
-@app.route('/login/discord')
-def login_discord():
-    user = confirm_login(DISCORD_REDIRECT_BASE_URI + "/login/discord")
-    if isinstance(user, dict):
-        # Save that to the db if there is a reddit instance
-        if("reddit_user" in session):
-            reddit_user = db.users.find_one({"discord.id": user["id"]})
-            discord_user = db.users.find_one({"reddit.id": session["reddit_user"]["id"]})
 
-            # Check if the reddit instance or discord instance already exist in the database.
-            # If one already exists but doesnt match the other, return an error
-            if (reddit_user and 'reddit' in reddit_user and reddit_user["reddit"]["id"] != session["reddit_user"]["id"]) \
-                or (discord_user and 'discord' in discord_user and discord_user["discord"]["id"] != user["id"]):
-                return "Error, that account is already affiliated <a href='/'>Return to Verify</a>"
+@app.exception_handler(AdminAuthException)
+async def admin_exception_handler(request: Request, exc: Exception):
+    return RedirectResponse(app.url_path_for('admin_login'))
 
-            # If we update the whole discord obj, it gets rid of the auth
-            _id = db.users.find_one_and_update(
-                {"reddit.id": session["reddit_user"]["id"]},
-                {"$set": {
-                    "discord.id": user["id"],
-                    "discord.username": user["username"],
-                    "discord.discriminator": user["discriminator"],
-                    "discord.name": user["name"],
-                    "verified": True,
-                    "verified_at": dt.utcnow().timestamp()
-                    }}
+
+###############################
+#           DEPENDS           #
+###############################
+
+async def confirm_login(request: Request, code: str = None, state: str = None, error: str = None) -> DiscordClient:
+    if not code:
+        return False
+
+    # Check for state and for 0 errors
+    state = request.session.get('oauth2_state')
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f'There was an error authenticating with discord: {error}'
+        )
+
+    #Verify state
+    if request.session.get('oauth2_state') != state:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'State mismatch'
+        )
+
+    # Fetch token
+    discord = make_discord_session()
+
+    try:
+        await discord.get_access_token(code, redirect_uri=REDIRECT_URI_BASE + request.url.path)
+
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f'There was an error authenticating with discord: {e}'
+        )
+
+    return discord
+
+
+async def auth(request: Request) -> dict:
+    if 'admin' in request.session:
+        admin = await db.admin.find_one({"_id": ObjectId(SERIALIZER.loads(request.session.get('admin')))})
+        if admin: return admin
+
+    raise AdminAuthException()
+
+
+################################
+#            ROUTES            #
+################################
+
+@app.get("/")
+async def verify(request: Request):
+    user = await get_user(request.session)
+
+    # If a user somehow has a Discord accoutn associated, but no reddit,
+    # drop them from the db and start over
+    if "discord" in user and 'reddit' not in user:
+        await db.users.find_one_and_delete({"_id": ObjectId(SERIALIZER.loads(request.session.get('id')))})
+        return RedirectResponse(app.url_path_for('logout'))
+
+    return templates.TemplateResponse("verify.html", {"request": request, "user": user})
+
+
+@app.get("/error")
+async def test_error(request: Request):
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="test 123")
+
+
+@app.get("/login/discord")
+async def login_discord(request: Request, discord: DiscordClient = Depends(confirm_login)):
+    if not 'id' in request.session:
+        return RedirectResponse(app.url_path_for('logout'))
+
+    if discord:
+        # Fetch the user
+        try:
+            d = await get_discord_user(discord)
+        except:
+            return RedirectResponse(app.url_path_for('verify'))
+
+        user = await get_user(request.session)
+
+        if not user:
+            return RedirectResponse(app.url_path_for('logout'))
+
+        # If the user is trying to verify a different Discord than we already have in the db
+        if 'discord' in user and user['discord']['id'] != d['id']:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail='Error, that account is already affiliated'
             )
 
-            # Save that to the session for easy template access
-            session["discord_user"] = {k:v for (k,v) in user.items() if k in ["id", "name"]}
+        # If we update the whole discord obj, it gets rid of the auth
+        _id = await db.users.find_one_and_update(
+            {"_id": ObjectId(SERIALIZER.loads(request.session.get('id')))},
+            {"$set": {
+                "discord.id": d["id"],
+                "discord.username": d["username"],
+                "discord.discriminator": d["discriminator"],
+                "discord.name": d["name"],
+                "discord.token": discord.access_token,
+                "verified": True,
+                "verified_at": dt.utcnow().timestamp()
+                }}
+        )
 
-            # Add the ID of that to the queue
-            db.queue.insert_one({'ref': _id["_id"]})
-
-        return redirect(url_for('verify'))
-
-    if user:
-        return user
+        await db.queue.insert_one({'ref': _id["_id"]})
+        return RedirectResponse(app.url_path_for('verify'))
 
     else:
         scope = ['identify']
-        discord = make_discord_session(scope=scope, redirect_uri=DISCORD_REDIRECT_BASE_URI + "/login/discord")
-        authorization_url, state = discord.authorization_url(
-            AUTHORIZATION_BASE_URL,
-            access_type="offline"
+        state = token_urlsafe()
+        auth_url = make_discord_session().get_authorize_url(scope=' '.join(scope), redirect_uri=REDIRECT_URI_BASE + request.url.path, state=state)
+        request.session['oauth2_state'] = state
+        return RedirectResponse(auth_url)
+
+
+@app.get('/admin/login')
+async def admin_login(request: Request, discord: DiscordClient = Depends(confirm_login)):
+    if discord:
+        guilds = await get_user_guilds(discord)
+        managed = get_user_managed_guilds(admin, guilds)
+        allowed = list(filter(lambda x: x['id'] in ALLOWED_SERVER_IDS, managed))
+
+        if not allowed:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="You are not admin on any valid servers :("
+            )
+
+        d = await get_discord_user(discord)
+
+        _id = await db.admin.find_one_and_update(
+            {"id": d["id"]},
+            {"$set": {
+                "username": d["username"],
+                "discriminator": d["discriminator"],
+                "name": d["name"],
+                "token": discord.access_token
+            }},
+            upsert = True,
+            return_document=ReturnDocument.AFTER
         )
-        session['oauth2_state'] = state
-        return redirect(authorization_url)
 
-@app.route('/admin/login')
-def admin_login():
-    user = confirm_login(DISCORD_REDIRECT_BASE_URI + "/admin/login")
-    if isinstance(user, dict):
-        session["discord_user"] = {k:v for (k,v) in user.items() if k in ["id", "name"]}
+        # Serialize the UUID from the db and save it to the session
+        request.session["admin"] = SERIALIZER.dumps(str(_id.get('_id')))
 
-        return redirect(url_for('admin'))
-
-    if user:
-        return user
+        return RedirectResponse(app.url_path_for('admin'))
 
     else:
         scope = ['identify', 'guilds']
-        discord = make_discord_session(scope=scope, redirect_uri=DISCORD_REDIRECT_BASE_URI + "/admin/login")
-        authorization_url, state = discord.authorization_url(
-            AUTHORIZATION_BASE_URL,
-            access_type="offline"
+        state = token_urlsafe()
+        auth_url = make_discord_session().get_authorize_url(scope=' '.join(scope), redirect_uri=REDIRECT_URI_BASE + request.url.path, state=state)
+        request.session['oauth2_state'] = state
+        return RedirectResponse(auth_url)
+
+
+@app.get('/login/reddit')
+async def login_reddit(request: Request, code: str = None, state: str = None, error: str = None):
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f'There was an error authenticating with reddit: {error}'
         )
-        session['oauth2_state'] = state
-        return redirect(authorization_url)
 
-@app.route('/login/reddit')
-def login_reddit():
-    # Check for state and for 0 errors
-    state = session.get('oauth2_state')
-    if request.values.get('error'):
-        error = {
-            'message': 'There was an error authenticating with reddit: {}'.format(request.values.get('error')),
-            'link': '<a href="{}">Return Home</a>'.format(url_for('verify'))
-        }
-        return render_template('error.html', session=session,  error=error)
+    if code:
+        #Verify state
+        if request.session.get('oauth2_state') != state:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f'State mismatch'
+            )
 
-    if state and request.args.get('code'):
         # Fetch token
-        client_auth = requests.auth.HTTPBasicAuth(REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET)
-        post_data = {"grant_type": "authorization_code", "code": request.args.get('code'), "redirect_uri": REDDIT_REDIRECT_URI}
-        reddit_token = requests.post(REDDIT_API_BASE_URL + "/access_token", auth=client_auth, data=post_data, headers={'User-agent': 'Discord auth, /u/RenegadeAI'}).json()
+        reddit = make_reddit_session()
+        auth = BasicAuth(REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET)
+        header = {'User-agent': 'Discord auth, /u/RenegadeAI'}
+        payload = {
+            'redirect_uri': REDIRECT_URI_BASE + request.url.path,
+            'grant_type': 'authorization_code',
+            'code': code
+        }
+
+        reddit_token = await reddit.request('POST', reddit.access_token_url, headers=header, auth=auth, data=payload)
 
         if not reddit_token or not 'access_token' in reddit_token:
-            return redirect(url_for('logout'))
+            return RedirectResponse(app.url_path_for('logout'))
+
+        reddit.access_token = reddit_token['access_token']
 
         # Fetch the user
-        user = get_reddit_user(reddit_token["access_token"])
+        user = await reddit.request('GET', REDDIT_OAUTH_BASE_URL + "/me", headers=header)
 
-        if('status' in user):
-            if(user['status'] == 'error'):
-                return render_template('error.html', session=session,  error=user)
+        account_age = user['created'] < (dt.utcnow() + timedelta(-7)).timestamp()
+        account_karma = user['comment_karma'] >= 20 or user['link_karma'] >= 10
 
-        # Generate api_key from user_id
-        serializer = JSONWebSignatureSerializer(app.config['SECRET_KEY'])
+        if(account_age and account_karma) or user['created'] < (dt.utcnow() + timedelta(-30)).timestamp():
+            # Save that to the db
+            user = {k:v for (k,v) in user.items() if k in ["id", "name"]}
 
-        # Store api_key and token
-        db.users.update_one(
+            # Only save the reddit instance if it doesnt already exist.
+            # The users id and name never changes anyway.
+            _id = await db.users.find_one_and_update(
+                {"reddit.id": user["id"]},
+                {"$setOnInsert": {
+                    "reddit": user,
+                    "verified": False,
+                    "role": False,
+                    }},
+                upsert = True,
+                return_document=ReturnDocument.AFTER
+            )
+
+            # Serialize the UUID from the db and save it to the session
+            request.session["id"] = SERIALIZER.dumps(str(_id.get('_id')))
+
+        else:
+            if not account_age:
+                detail = "Error, your account does not meet the minimum age requirements"
+            elif not account_karma:
+                detail = "Error, your account does not meet the minimum karma requirements"
+
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=detail
+            )
+
+        # Store token
+        await db.users.update_one(
             {"reddit.id": user['id']},
             {"$set": {"reddit.token": reddit_token}}
         )
 
-        session.permanent = True
-        return redirect(url_for('verify'))
+        return RedirectResponse(app.url_path_for('verify'))
 
     else:
         scope = ['identity']
-        reddit = make_reddit_session(scope=scope)
-        authorization_url, state = reddit.authorization_url(
-            REDDIT_API_BASE_URL + "/authorize",
-            access_type="offline"
-        )
-        session['oauth2_state'] = state
-        return redirect(authorization_url)
+        state = token_urlsafe()
+        auth_url = make_reddit_session().get_authorize_url(scope=','.join(scope), redirect_uri=REDIRECT_URI_BASE + request.url.path, state=state, access_type="offline")
+        request.session['oauth2_state'] = state
+        return RedirectResponse(auth_url)
 
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect(url_for('verify'))
 
-@app.route('/list')
-def user_list_redir():
-    return redirect(url_for('user_list'), code=302)
+@app.get('/logout')
+async def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse(app.url_path_for('verify'))
 
-@app.route('/admin')
-@require_auth
-def admin():
-    user_servers = []
-    users = []
 
-    user = get_discord_user(session['discord_api_token'])
-    guilds = get_user_guilds(session['discord_api_token'])
-    servers = sorted(
-        get_user_managed_servers(user, guilds),
-        key=lambda s: s['name'].lower()
-    )
+@app.get('/admin')
+async def admin(request: Request, admin=Depends(auth)):
+    return templates.TemplateResponse('admin.html', {'request': request, 'user': admin})
 
-    user_servers = []
-    for server in servers:
-        #print(server['id'] + ' : ' + server['name'])
-        if(server['id'] in ALLOWED_SERVER_IDS):
-            user_servers.append(server)
 
-    if(len(user_servers) > 0):
-        return render_template('admin.html', user=user, user_servers=user_servers)
-    else:
-        return "You are not admin on any valid servers :("
+@app.get('/admin/list')
+async def user_list(request: Request, admin=Depends(auth)):
+    return templates.TemplateResponse('list.html', {'request': request, 'users': await db.users.find(sort=[("verified_at", DESCENDING)]).to_list(1000), 'user': admin})
 
-@app.route('/admin/list')
-@require_auth
-def user_list():
-    user_servers = []
-    users = []
 
-    user = get_discord_user(session['discord_api_token'])
-    guilds = get_user_guilds(session['discord_api_token'])
-    servers = sorted(
-        get_user_managed_servers(user, guilds),
-        key=lambda s: s['name'].lower()
-    )
-
-    user_servers = []
-    for server in servers:
-        if(server['id'] in ALLOWED_SERVER_IDS):
-            user_servers.append(server)
-
-    if(len(user_servers) > 0):
-        return render_template('list.html', users=db.users.find(sort=[("verified_at", pymongo.DESCENDING)]), user=user, user_servers=user_servers)
-    else:
-        return "You are not admin on any valid servers :("
-
-@app.route('/ajax/stats')
-@require_auth
-def ajax_stats():
-    range = request.args.get('range') or 'week'
-
+@app.get('/ajax/stats')
+async def ajax_stats(request: Request, admin=Depends(auth), range: str = 'week'):
     today = dt.utcnow()
     upper = today + timedelta(days=1) # Add an extra day, otherwise today wont be included
 
@@ -283,7 +363,7 @@ def ajax_stats():
 
     dates = {}
 
-    for user in db.users.find({"verified_at": {"$gt": lower.timestamp(), "$lte": upper.timestamp()}}, sort=[('verified_at', pymongo.ASCENDING)]):
+    for user in await db.users.find({"verified_at": {"$gt": lower.timestamp(), "$lte": upper.timestamp()}}, sort=[('verified_at', ASCENDING)]).to_list(1000):
         date = dt.fromtimestamp(user['verified_at']).date().isoformat()
 
         if date not in dates:
@@ -292,14 +372,14 @@ def ajax_stats():
         else:
             dates[date] += 1
 
-    return jsonify(dates)
+    return JSONResponse(dates)
+
 
 @app.route('/ajax/list')
-@require_auth
-def ajax_list():
-    users = db.users.find(sort=[("verified_at", pymongo.DESCENDING)], limit=25)
+async def ajax_list(request: Request, admin=Depends(auth)):
+    users = await db.users.find(sort=[("verified_at", DESCENDING)]).to_list(25)
 
-    return jsonify([{
+    return JSONResponse([{
             "id": str(user["_id"]),
             "reddit": user["reddit"]["name"] if 'reddit' in user else None,
             "discord": user["discord"]["name"] if 'discord' in user else None,
@@ -307,178 +387,57 @@ def ajax_list():
             "verified_at": user.get("verified_at", None),
         } for user in users])
 
-''' ------------------------------------------------------------------------- '''
 
-def get_discord_user(token):
-    # If it's an api_token, go fetch the discord_token
-    if token.get('api_key'):
-        token = db.users.find_one({"discord.id": token['user_id']})['discord']['token']
-
-    discord = make_discord_session(token=token)
-
-    req = discord.get(DISCORD_API_BASE_URL + '/users/@me')
-    if req.status_code != 200:
-        abort(req.status_code)
-
-    user = req.json()
-
-    user["name"] = user["username"] + "#" + user["discriminator"]
-
-    return user
-
-def get_reddit_user(token):
-    user = requests.get(REDDIT_OAUTH_BASE_URL + "/me", headers={"Authorization": "bearer " + token, 'User-agent': 'Reddiscord, /u/RenegadeAI'}).json()
-
-    account_age = user['created'] < (dt.utcnow() + timedelta(-7)).timestamp()
-    account_karma = user['comment_karma'] >= 20 or user['link_karma'] >= 10
-
-    if(account_age and account_karma) or user['created'] < (dt.utcnow() + timedelta(-30)).timestamp():
-        # Save that to the db
-        user = {k:v for (k,v) in user.items() if k in ["id", "name"]}
-
-        # Only save the reddit instance if it doesnt already exist.
-        # The users id and name never changes anyway.
-        db.users.find_one_and_update(
-            {"reddit.id": user["id"]},
-            {"$setOnInsert": {
-                "reddit": user,
-                "verified": False,
-                "role": False,
-                }},
-            upsert = True
-        )
-
-        # Save that to the session for easy template access
-        session["reddit_user"] = user
-
-        return user
-
-    else:
-        error = {"status": "error", "link": "<a href='/'>Return Home</a>"}
-        if not account_age:
-            error['message'] = "Error, your account does not meet the minimum age requirements"
-        elif not account_karma:
-            error['message'] = "Error, your account does not meet the minimum karma requirements"
-
-        return error
-
-def confirm_login(redirect_uri):
-    # Check for state and for 0 errors
-    state = session.get('oauth2_state')
-
-    if request.values.get('error'):
-        error = {
-            'message': 'There was an error authenticating with discord: {}'.format(request.values.get('error')),
-            'link': '<a href="{}">Return Home</a>'.format(url_for('verify'))
-        }
-        return render_template('error.html', session=session,  error=error)
-
-    if not state or not request.args.get('code'):
-        return False
-
-    # Fetch token
-    discord = make_discord_session(state=state, redirect_uri=redirect_uri)
-    discord_token = discord.fetch_token(TOKEN_URL, client_secret=DISCORD_CLIENT_SECRET, authorization_response=request.url.replace('http:', 'https:'))
-
-    if not discord_token:
-        return redirect(url_for('verify'))
-
-    # Fetch the user
-    user = get_discord_user(discord_token)
-
-    if('status' in user):
-        if(user['status'] == 'error'):
-            return render_template('error.html', session=session,  error=user)
-
-    else:
-        # Generate api_key from user_id
-        serializer = JSONWebSignatureSerializer(app.config['SECRET_KEY'])
-        api_key = str(serializer.dumps({'user_id': user['id']}))
-
-        db.users.find_one_and_update(
-            {"discord.id": user["id"]},
-            {"$set": {
-                "discord.api_key": api_key,
-                "discord.token": discord_token
-                }}
-        )
-
-        # Store api_token in client session
-        discord_api_token = {
-            'api_key': api_key,
-            'user_id': user['id']
-        }
-        session.permanent = True
-        session['discord_api_token'] = discord_api_token
-
-        return user
-
-def get_user_guilds(token):
-    # If it's an api_token, go fetch the discord_token
-    if token.get('api_key'):
-        user_id = token['user_id']
-        token = db.users.find_one({"discord.id": user_id})['discord']['token']
-
-    else:
-        user_id = get_discord_user(token)['id']
-
-    discord = make_discord_session(token=token)
-
-    req = discord.get(DISCORD_API_BASE_URL + '/users/@me/guilds')
-    if req.status_code != 200:
-        abort(req.status_code)
-
-    guilds = req.json()
-
-    return guilds
+################################
+#             MISC             #
+################################
 
 
-def get_user_managed_servers(user, guilds):
+async def get_user(session) -> dict:
+    if session.get('id'):
+        return await db.users.find_one({"_id": ObjectId(SERIALIZER.loads(session.get('id')))})
+
+    return {}
+
+
+async def get_discord_user(discord: DiscordClient) -> dict:
+    d = await discord.request('GET', 'users/@me')
+    d["name"] = d["username"] + "#" + d["discriminator"]
+    return d
+
+
+async def get_user_guilds(discord: DiscordClient) -> dict:
+    return await discord.request('GET', 'users/@me/guilds')
+
+
+def get_user_managed_guilds(user, guilds) -> list:
     return list(filter(lambda g: (g['owner'] is True) or bool((int(g['permissions']) >> 5) & 1), guilds))
 
-def token_updater(discord_token):
-    user = get_discord_user(discord_token)
-    # Save the new discord_token
-    db.users.find_one_and_update(
-        {"reddit.id": session["reddit_user"]["id"]},
-        {"$set": {"discord.token": discord_token}}
+
+def make_discord_session(access_token=None) -> DiscordClient:
+    return DiscordClient(
+        DISCORD_CLIENT_ID,
+        DISCORD_CLIENT_SECRET,
+        access_token=access_token
     )
 
-def make_discord_session(token=None, state=None, scope=None, redirect_uri=None):
-    return OAuth2Session(
-        client_id=DISCORD_CLIENT_ID,
-        token=token,
-        state=state,
-        scope=scope,
-        redirect_uri=redirect_uri,
-        auto_refresh_kwargs={
-            'client_id': DISCORD_CLIENT_ID,
-            'client_secret': DISCORD_CLIENT_SECRET,
-        },
-        auto_refresh_url=TOKEN_URL,
-        token_updater=token_updater
+
+def make_reddit_session() -> OAuth2Client:
+    return OAuth2Client(
+        REDDIT_CLIENT_ID,
+        REDDIT_CLIENT_SECRET,
+        base_url=REDDIT_API_BASE_URL,
+        authorize_url=REDDIT_API_BASE_URL + "/authorize",
+        access_token_url=REDDIT_API_BASE_URL + "/access_token"
     )
 
-def make_reddit_session(token=None, state=None, scope=None):
-    return OAuth2Session(
-        client_id=REDDIT_CLIENT_ID,
-        token=token,
-        state=state,
-        scope=scope,
-        redirect_uri=REDDIT_REDIRECT_URI,
-        auto_refresh_kwargs={
-            'client_id':None,
-            'client_secret':None,
-        },
-        auto_refresh_url=None,
-        token_updater=None
-    )
 
-# FILTERS
+###############################
+#           FILTERS           #
+###############################
 
-@app.template_filter('datetimeformat')
+
 def datetimeformat(timestamp):
     return dt.utcfromtimestamp(timestamp).strftime('%Y-%m-%dT%H:%M:%SZ')
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', debug=True)
+templates.env.filters['datetimeformat'] = datetimeformat

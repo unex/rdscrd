@@ -1,17 +1,14 @@
 {% extends "base.html" %}
 {% block content %}
 
-
 <div class="container error-page">
-	<div class='error-icon'><i class="material-icons">error</i></div>
+	<h3>An error occured</h3>
 	<p>
-		{{error.message|safe}}
+		{{exc.detail|safe}}
 	</p>
-	{% if error.link %}
 	<p>
-		{{ error.link|safe }}
+		<a href="{{url_for('verify')}}">Return Home</a>
 	</p>
-	{% endif %}
 </div>
 
 {% endblock %}
