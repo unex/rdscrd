@@ -23,11 +23,7 @@ from secrets import token_urlsafe
 from itsdangerous.url_safe import URLSafeSerializer
 
 # DATABASE
-DB_HOST = os.environ.get("DB_HOST")
-DB_PORT = os.environ.get("DB_PORT")
-DB_DB = os.environ.get("DB_DB")
-DB_USER = os.environ.get("DB_USER")
-DB_PASSWORD = os.environ.get("DB_PASSWORD")
+MONGO_URI = os.environ.get("MONGO_URI")
 
 # DISCORD API
 DISCORD_CLIENT_ID = os.environ.get("DISCORD_CLIENT_ID")
@@ -60,9 +56,9 @@ db: AsyncIOMotorCollection
 @app.on_event("startup")
 async def create_db_client():
     global mongo, db
-    mongo = AsyncIOMotorClient(host=DB_HOST, port=int(DB_PORT), username=DB_USER, password=DB_PASSWORD, authSource=DB_DB, authMechanism='SCRAM-SHA-256')
+    mongo = AsyncIOMotorClient(MONGO_URI)
     await mongo.admin.command("ismaster")
-    db = mongo[DB_DB]
+    db = mongo.reddiscord
 
 
 @app.on_event("shutdown")
@@ -123,6 +119,11 @@ async def confirm_login(request: Request, code: str = None, state: str = None, e
 
     return discord
 
+async def user(request: Request) -> dict:
+    if 'id' in request.session:
+        return await db.users.find_one({"_id": ObjectId(SERIALIZER.loads(request.session['id']))})
+
+    return {}
 
 async def auth(request: Request) -> dict:
     if 'admin' in request.session:
@@ -137,9 +138,7 @@ async def auth(request: Request) -> dict:
 ################################
 
 @app.get("/")
-async def verify(request: Request):
-    user = await get_user(request.session)
-
+async def root(request: Request, user = Depends(user)):
     # If a user somehow has a Discord accoutn associated, but no reddit,
     # drop them from the db and start over
     if "discord" in user and 'reddit' not in user:
@@ -149,14 +148,26 @@ async def verify(request: Request):
     return templates.TemplateResponse("verify.html", {"request": request, "user": user})
 
 
+@app.get("/v/{token}")
+async def from_token(request: Request, token):
+    if token:
+        user = await db.users.find_one({'token': token})
+
+        if user and 'reddit' not in user:
+            request.session["id"] = SERIALIZER.dumps(str(user.get('_id')))
+            return RedirectResponse(app.url_path_for('login_reddit'))
+
+    return RedirectResponse(app.url_path_for('root'))
+
+
 @app.get("/error")
 async def test_error(request: Request):
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="test 123")
 
 
 @app.get("/login/discord")
-async def login_discord(request: Request, discord: DiscordClient = Depends(confirm_login)):
-    if not 'id' in request.session:
+async def login_discord(request: Request, discord: DiscordClient = Depends(confirm_login), user = Depends(user)):
+    if not user or 'reddit' not in user:
         return RedirectResponse(app.url_path_for('logout'))
 
     if discord:
@@ -164,12 +175,7 @@ async def login_discord(request: Request, discord: DiscordClient = Depends(confi
         try:
             d = await get_discord_user(discord)
         except:
-            return RedirectResponse(app.url_path_for('verify'))
-
-        user = await get_user(request.session)
-
-        if not user:
-            return RedirectResponse(app.url_path_for('logout'))
+            return RedirectResponse(app.url_path_for('root'))
 
         # If the user is trying to verify a different Discord than we already have in the db
         if 'discord' in user and user['discord']['id'] != d['id']:
@@ -182,18 +188,15 @@ async def login_discord(request: Request, discord: DiscordClient = Depends(confi
         _id = await db.users.find_one_and_update(
             {"_id": ObjectId(SERIALIZER.loads(request.session.get('id')))},
             {"$set": {
-                "discord.id": d["id"],
-                "discord.username": d["username"],
-                "discord.discriminator": d["discriminator"],
+                "discord.id": int(d["id"]),
                 "discord.name": d["name"],
-                "discord.token": discord.access_token,
                 "verified": True,
                 "verified_at": dt.utcnow().timestamp()
                 }}
         )
 
         await db.queue.insert_one({'ref': _id["_id"]})
-        return RedirectResponse(app.url_path_for('verify'))
+        return RedirectResponse(app.url_path_for('root'))
 
     else:
         scope = ['identify']
@@ -244,7 +247,7 @@ async def admin_login(request: Request, discord: DiscordClient = Depends(confirm
 
 
 @app.get('/login/reddit')
-async def login_reddit(request: Request, code: str = None, state: str = None, error: str = None):
+async def login_reddit(request: Request, user = Depends(user), code: str = None, state: str = None, error: str = None):
     if error:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -277,30 +280,41 @@ async def login_reddit(request: Request, code: str = None, state: str = None, er
         reddit.access_token = reddit_token['access_token']
 
         # Fetch the user
-        user = await reddit.request('GET', REDDIT_OAUTH_BASE_URL + "/me", headers=header)
+        ruser = await reddit.request('GET', REDDIT_OAUTH_BASE_URL + "/me", headers=header)
 
-        account_age = user['created'] < (dt.utcnow() + timedelta(-7)).timestamp()
-        account_karma = user['comment_karma'] >= 20 or user['link_karma'] >= 10
+        account_age = ruser['created'] < (dt.utcnow() + timedelta(-7)).timestamp()
+        account_karma = ruser['comment_karma'] >= 20 or ruser['link_karma'] >= 10
 
-        if(account_age and account_karma) or user['created'] < (dt.utcnow() + timedelta(-30)).timestamp():
+        if(account_age and account_karma) or ruser['created'] < (dt.utcnow() + timedelta(-30)).timestamp():
             # Save that to the db
-            user = {k:v for (k,v) in user.items() if k in ["id", "name"]}
+            ruser = {k:v for (k,v) in ruser.items() if k in ["id", "name"]}
 
-            # Only save the reddit instance if it doesnt already exist.
-            # The users id and name never changes anyway.
-            _id = await db.users.find_one_and_update(
-                {"reddit.id": user["id"]},
-                {"$setOnInsert": {
-                    "reddit": user,
-                    "verified": False,
-                    "role": False,
+            # This will happen if they are getting redirected from a token
+            if user:
+                await db.users.find_one_and_update(
+                    {"discord.id": user["discord"]["id"]},
+                    {"$set": {
+                        "reddit": ruser,
+                        "verified": True,
+                        "verified_at": dt.utcnow().timestamp()
                     }},
-                upsert = True,
-                return_document=ReturnDocument.AFTER
-            )
+                )
 
-            # Serialize the UUID from the db and save it to the session
-            request.session["id"] = SERIALIZER.dumps(str(_id.get('_id')))
+            else:
+                # Only save the reddit instance if it doesnt already exist.
+                # The users id and name never changes anyway.
+                _id = await db.users.find_one_and_update(
+                    {"reddit.id": ruser["id"]},
+                    {"$setOnInsert": {
+                        "reddit": ruser,
+                        "verified": False
+                    }},
+                    upsert = True,
+                    return_document=ReturnDocument.AFTER
+                )
+
+                # Serialize the UUID from the db and save it to the session
+                request.session["id"] = SERIALIZER.dumps(str(_id.get('_id')))
 
         else:
             if not account_age:
@@ -313,13 +327,7 @@ async def login_reddit(request: Request, code: str = None, state: str = None, er
                 detail=detail
             )
 
-        # Store token
-        await db.users.update_one(
-            {"reddit.id": user['id']},
-            {"$set": {"reddit.token": reddit_token}}
-        )
-
-        return RedirectResponse(app.url_path_for('verify'))
+        return RedirectResponse(app.url_path_for('root'))
 
     else:
         scope = ['identity']
@@ -332,7 +340,7 @@ async def login_reddit(request: Request, code: str = None, state: str = None, er
 @app.get('/logout')
 async def logout(request: Request):
     request.session.clear()
-    return RedirectResponse(app.url_path_for('verify'))
+    return RedirectResponse(app.url_path_for('root'))
 
 
 @app.get('/admin')
@@ -389,13 +397,6 @@ async def ajax_list(request: Request, admin=Depends(auth)):
 ################################
 #             MISC             #
 ################################
-
-
-async def get_user(session) -> dict:
-    if session.get('id'):
-        return await db.users.find_one({"_id": ObjectId(SERIALIZER.loads(session.get('id')))})
-
-    return {}
 
 
 async def get_discord_user(discord: DiscordClient) -> dict:
