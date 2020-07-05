@@ -184,15 +184,27 @@ async def login_discord(request: Request, discord: DiscordClient = Depends(confi
                 detail='Error, that account is already affiliated'
             )
 
+        # If the user does not use /v/ it will create a duplicate entry in the db
+        # So we remove that here
+        # not sure if we can use an aggregate pipeline here....
+        dup = await db.users.find_one_and_delete(
+            {
+                "discord.id": int(d["id"]),
+                "reddit": {"$exists": False},
+                "token": {"$exists": True}
+            }
+        )
+
         # If we update the whole discord obj, it gets rid of the auth
         _id = await db.users.find_one_and_update(
             {"_id": ObjectId(SERIALIZER.loads(request.session.get('id')))},
             {"$set": {
                 "discord.id": int(d["id"]),
                 "discord.name": d["name"],
+                "token": dup.get("token"),
                 "verified": True,
                 "verified_at": dt.utcnow().timestamp()
-                }}
+            }}
         )
 
         await db.queue.insert_one({'ref': _id["_id"]})
