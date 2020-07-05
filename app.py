@@ -207,7 +207,6 @@ async def login_discord(request: Request, discord: DiscordClient = Depends(confi
             }}
         )
 
-        await db.queue.insert_one({'ref': _id["_id"]})
         return RedirectResponse(app.url_path_for('root'))
 
     else:
