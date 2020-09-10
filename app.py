@@ -12,8 +12,9 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from starlette.middleware.sessions import SessionMiddleware
 
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
+from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import ReturnDocument, ASCENDING, DESCENDING
+from pymongo.database import Database
 from bson.objectid import ObjectId
 
 from aiohttp import BasicAuth
@@ -51,7 +52,7 @@ templates = Jinja2Templates(directory="templates")
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
 mongo: AsyncIOMotorClient
-db: AsyncIOMotorCollection
+db: Database
 
 @app.on_event("startup")
 async def create_db_client():
@@ -230,7 +231,7 @@ async def login_discord(request: Request, discord: DiscordClient = Depends(confi
             {'$set': {
                 **doc,
                 **{
-                "verified": True,
+                    "verified": True,
                     "verified_at": dt.utcnow().timestamp(),
                     "discord.id": int(d['id']),
                     "discord.name": d["name"]
