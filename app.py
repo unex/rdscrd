@@ -74,10 +74,16 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 class AdminAuthException(Exception):
     pass
 
+class UserHasGoneAway(Exception):
+    pass
 
 @app.exception_handler(AdminAuthException)
 async def admin_exception_handler(request: Request, exc: Exception):
     return RedirectResponse(app.url_path_for('admin_login'))
+
+@app.exception_handler(UserHasGoneAway)
+async def no_user_exception_handler(request: Request, exc: Exception):
+    return RedirectResponse(app.url_path_for('logout'))
 
 
 ###############################
@@ -121,7 +127,12 @@ async def confirm_login(request: Request, code: str = None, state: str = None, e
 
 async def user(request: Request) -> dict:
     if 'id' in request.session:
-        return await db.users.find_one({"_id": ObjectId(SERIALIZER.loads(request.session['id']))})
+        user = await db.users.find_one({"_id": ObjectId(SERIALIZER.loads(request.session['id']))})
+        if user:
+            return user
+
+        # if there is an id in the session but no user gets returned, the doc probably got deleted
+        raise UserHasGoneAway()
 
     return {}
 
