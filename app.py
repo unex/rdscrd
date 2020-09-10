@@ -184,28 +184,51 @@ async def login_discord(request: Request, discord: DiscordClient = Depends(confi
                 detail='Error, that account is already affiliated'
             )
 
-        # If the user does not use /v/ it will create a duplicate entry in the db
-        # So we remove that here
-        # not sure if we can use an aggregate pipeline here....
-        dup = await db.users.find_one_and_delete(
-            {
-                "discord.id": int(d["id"]),
-                "reddit": {"$exists": False},
-                "token": {"$exists": True}
-            }
-        )
+        # aggregate magic, will get all matching reddit and discord entries
+        # in the db and consolidate them into one document
+        aggregate = await db.users.aggregate([
+            {'$match': { '$or': [
+                { 'reddit.id': user['reddit']['id'] },
+                { 'discord.id': int(d['id']) }
+            ]}},
+            { '$group': {
+                '_id': None,
+                'data': { '$push': '$$ROOT' }
+            }},
+            { '$replaceWith': {
+                '$mergeObjects': '$data'
+            }}
+        ]).to_list(1) # should only return one item
 
-        # If we update the whole discord obj, it gets rid of the auth
-        _id = await db.users.find_one_and_update(
-            {"_id": ObjectId(SERIALIZER.loads(request.session.get('id')))},
-            {"$set": {
-                "discord.id": int(d["id"]),
-                "discord.name": d["name"],
-                "token": dup.get("token"),
+        doc = aggregate[0]
+
+        _id = doc.pop('_id')
+
+        # drop all other docs that do not match the new aggregate
+        await db.users.delete_many({
+            '$or': [
+                { 'reddit.id': user['reddit']['id'] },
+                { 'discord.id': int(d['id']) }
+            ],
+            '_id': { '$ne': _id}
+        })
+
+        # update the aggregate
+        await db.users.find_one_and_update(
+            {'_id': _id},
+            {'$set': {
+                **doc,
+                **{
                 "verified": True,
-                "verified_at": dt.utcnow().timestamp()
+                    "verified_at": dt.utcnow().timestamp(),
+                    "discord.id": int(d['id']),
+                    "discord.name": d["name"]
+                }
             }}
         )
+
+        # ensure the session is set to the correct reference _id
+        request.session["id"] = SERIALIZER.dumps(str(_id))
 
         return RedirectResponse(app.url_path_for('root'))
 
